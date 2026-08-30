@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marwan's Schedule</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="sky"></canvas>
+
+  <header id="bar">
+    <div class="left">
+      <span id="weekTitle">WEEK OF —</span>
+      <button id="zoneChip" class="chip" title="Time zone in use">—</button>
+    </div>
+    <nav class="nav">
+      <button id="prevWeek" class="btn" title="Previous week">&lt;&lt;</button>
+      <button id="today" class="btn wide">TODAY &#9662;</button>
+      <div id="weekPicker" class="weekPicker" hidden>
+        <div class="pickHead">JUMP TO WEEK</div>
+        <div id="pickRows"></div>
+      </div>
+      <button id="nextWeek" class="btn" title="Next week">&gt;&gt;</button>
+      <button id="hide" class="btn" title="Hide to tray (Esc)">—</button>
+    </nav>
+  </header>
+
+  <div id="diagnostics" hidden></div>
+
+  <main>
+    <section id="schedulePane" class="pane focused">
+      <div class="paneHead">
+        <span class="mark cyan"></span>
+        <span class="paneName">SCHEDULE</span>
+        <span id="blockCount" class="count"></span>
+      </div>
+      <div id="dayHeads" class="dayHeads"></div>
+      <div id="filterBar" class="filterBar" hidden>
+        <span id="filterLabel"></span>
+        <button id="filterClear" class="btn tiny">CLEAR</button>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <section id="todoPane" class="pane">
+      <div class="paneHead">
+        <span class="mark sand"></span>
+        <span class="paneName">TO DO</span>
+        <span id="openCount" class="count"></span>
+      </div>
+      <div id="buckets" class="buckets"></div>
+      <form id="addForm" class="addRow" autocomplete="off">
+        <input id="addInput" type="text" placeholder="+ add — try: math hw fri ~2h #math   (type help)" />
+      </form>
+      <div id="addEcho" class="addEcho" hidden></div>
+      <div id="footHint" class="footHint">
+        <span id="statsLine">—</span>
+      </div>
+    </section>
+  </main>
+
+  <div id="timerBar" class="timerBar" hidden>
+    <span class="mark gold"></span>
+    <span id="timerTitle" class="tTitle"></span>
+    <span id="timerElapsed" class="tElapsed">0:00:00</span>
+    <span id="timerEstimate" class="tEst"></span>
+    <button id="timerStop" class="btn stop">STOP</button>
+  </div>
+
+  <div id="dragGhost" class="dragGhost" hidden></div>
+
+  <div id="detailOverlay" class="overlay" hidden>
+    <div class="sheet">
+      <div class="sheetHead">
+        <span class="eyebrow">ITEM</span>
+        <button id="detailClose" class="btn">CLOSE</button>
+      </div>
+      <div id="detailBody" class="detailBody"></div>
+    </div>
+  </div>
+
+  <div id="helpOverlay" class="overlay" hidden>
+    <div class="sheet">
+      <div class="sheetHead">
+        <span class="eyebrow">SYNTAX</span>
+        <button id="helpClose" class="btn">CLOSE</button>
+      </div>
+      <pre id="helpBody"></pre>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

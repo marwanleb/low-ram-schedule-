@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["core", "cli", "bot", "app/src-tauri"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.82"
+
+[workspace.dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+clap = { version = "4", features = ["derive"] }
+iana-time-zone = "0.1"
+ureq = { version = "2", features = ["json"] }

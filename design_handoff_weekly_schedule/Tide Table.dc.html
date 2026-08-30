@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Inconsolata:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#0c0e12;height:100%}
+*{box-sizing:border-box}
+a{color:#7fd0ec;text-decoration:none}
+a:hover{color:#bfe9f7}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#0c0e12}
+::-webkit-scrollbar-thumb{background:#2a3140;border:2px solid #0c0e12}
+::-webkit-scrollbar-thumb:hover{background:#3d4759}
+input,button{font:inherit;color:inherit}
+@keyframes ttpulse{0%,100%{opacity:1}50%{opacity:.25}}
+</style>
+</helmet>
+<div style="position:relative;height:100vh;display:flex;flex-direction:column;background:#0c0e12;color:#e9ecf1;font-family:'Inconsolata',ui-monospace,monospace;padding:18px 20px 20px;gap:12px;overflow:hidden">
+  <dc-import name="Sky" waterline="{{ 0.78 }}" hint-size="100%,100%" style="position:absolute;inset:0;z-index:0"></dc-import>
+
+  <header style="position:relative;z-index:60;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex:none">
+    <div style="display:flex;align-items:baseline;gap:12px">
+      <div style="font-family:'Silkscreen',monospace;font-size:19px;letter-spacing:.02em;color:#F5B942;text-shadow:0 2px 0 rgba(8,14,26,.55)">{{ weekTitle }}</div>
+      <button onclick="{{ openTzReview }}" style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:4px 7px;background:rgba(12,19,34,.6);border:1px solid rgba(207,234,246,.28);color:#bfe9f7;cursor:pointer" style-hover="border-color:#7fd0ec">{{ zoneLabel }}</button>
+    </div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px">
+      <button onclick="{{ prevWeek }}" style="font-family:'Silkscreen',monospace;font-size:11px;padding:8px 12px;background:rgba(12,19,34,.72);border:2px solid rgba(207,234,246,.3);color:#e2f1fa;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)" style-hover="border-color:#7fd0ec;color:#e9ecf1">&#60;&#60;</button>
+      <button onclick="{{ togglePicker }}" style="font-family:'Silkscreen',monospace;font-size:11px;letter-spacing:.1em;padding:8px 14px;background:{{ pickerBg }};border:2px solid {{ pickerBorder }};color:#e2f1fa;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)" style-hover="border-color:#7fd0ec;color:#e9ecf1">TODAY &#9662;</button>
+      <button onclick="{{ nextWeek }}" style="font-family:'Silkscreen',monospace;font-size:11px;padding:8px 12px;background:rgba(12,19,34,.72);border:2px solid rgba(207,234,246,.3);color:#e2f1fa;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)" style-hover="border-color:#7fd0ec;color:#e9ecf1">&#62;&#62;</button>
+      <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:250px;max-height:330px;overflow:auto;background:rgba(12,16,24,.97);border:2px solid #2f4a5e;box-shadow:0 10px 0 rgba(6,10,18,.45);padding:6px;display:flex;flex-direction:column;gap:1px">
+          <div style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.14em;color:#F5B942;padding:7px 8px 8px">JUMP TO WEEK</div>
+          <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="10">
+            <button onclick="{{ w.onPick }}" style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:7px 9px;background:{{ w.bg }};border:none;border-left:3px solid {{ w.edge }};cursor:pointer" style-hover="background:#1b2231">
+              <span style="font-size:12.5px;letter-spacing:.02em;color:{{ w.color }}">{{ w.range }}</span>
+              <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.08em;color:{{ w.relColor }};white-space:nowrap">{{ w.rel }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </header>
+
+  <sc-if value="{{ hasWarnings }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;z-index:20;flex:none;display:flex;flex-direction:column;gap:1px">
+      <sc-for list="{{ warnings }}" as="wn" hint-placeholder-count="1">
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:rgba(37,32,20,.9);border:1px solid #4a4334;border-left:3px solid #F5B942">
+          <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#F5B942;flex:none">NOTE</span>
+          <span style="flex:1;min-width:0;font-size:12px;letter-spacing:.01em;color:#d8cfb4;text-wrap:pretty">{{ wn.text }}</span>
+          <button onclick="{{ wn.onDismiss }}" style="flex:none;padding:2px 7px;background:transparent;border:1px solid #4a4334;cursor:pointer;font-size:11px;color:#a99e80" style-hover="border-color:#F5B942;color:#F5B942">&#215;</button>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <main style="position:relative;z-index:1;flex:1;min-height:0;display:flex;gap:14px">
+
+    <!-- PANE 1 · SCHEDULE -->
+    <section onclick="{{ focusSchedule }}" style="flex:1 1 {{ schedW }};min-width:0;display:flex;flex-direction:column;background:rgba(16,20,27,.9);backdrop-filter:blur(3px);border:2px solid {{ schedBorder }};clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);transition:flex-basis .5s cubic-bezier(.45,0,.2,1),border-color .3s;cursor:pointer">
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 12px;border-bottom:2px solid #1f2530;background:rgba(10,13,20,.72)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:8px;height:8px;background:#7fd0ec;flex:none"></span>
+          <span style="font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.12em;color:#e9ecf1">SCHEDULE</span>
+          <span style="font-size:12px;letter-spacing:.06em;color:#6b7280">{{ blockCount }}</span>
+        </div>
+      </div>
+
+      <div style="flex:none;display:flex;padding-left:12px;padding-right:{{ headPad }};border-bottom:2px solid #1f2530;background:rgba(10,13,20,.72)">
+        <div style="width:{{ gutter }}px;flex:none"></div>
+        <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+          <button onclick="{{ d.onClick }}" onmouseenter="{{ d.onEnter }}" onmouseleave="{{ d.onLeave }}" style="flex:{{ d.flex }};min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;background:{{ d.headBg }};border:none;border-left:1px solid transparent;border-bottom:3px solid {{ d.underline }};cursor:pointer;transition:flex-grow .32s cubic-bezier(.4,0,.2,1),background-color .3s ease">
+            <span style="font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.08em;color:{{ d.labelColor }}">{{ d.label }}</span>
+            <span style="font-size:13px;font-weight:600;color:{{ d.dateColor }}">{{ d.date }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div ref="{{ gridRef }}" style="flex:1;min-height:0;overflow:auto;padding:0 12px 16px">
+        <div style="display:flex">
+          <div style="width:{{ gutter }}px;flex:none;display:flex;flex-direction:column">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="13">
+              <div style="height:{{ r.h }};flex:none;font-size:{{ r.labelSize }};line-height:1;letter-spacing:.04em;color:{{ r.labelColor }};text-align:right;padding-right:9px;transition:height .34s cubic-bezier(.4,0,.2,1),font-size .34s ease,color .34s ease">{{ r.label }}</div>
+            </sc-for>
+          </div>
+          <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+            <div onmouseenter="{{ d.onEnter }}" onmouseleave="{{ d.onLeave }}" style="flex:{{ d.flex }};min-width:0;position:relative;height:{{ gridH }};border-left:1px solid #1c2029;background:{{ d.colBg }};display:flex;flex-direction:column;transition:height .34s cubic-bezier(.4,0,.2,1),flex-grow .32s cubic-bezier(.4,0,.2,1),background-color .3s ease">
+              <sc-for list="{{ d.rows }}" as="r" hint-placeholder-count="13">
+                <div style="height:{{ r.h }};flex:none;border-bottom:1px solid #1a1e27;transition:height .34s cubic-bezier(.4,0,.2,1)"></div>
+              </sc-for>
+              <sc-if value="{{ d.ghost }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:2px;right:2px;top:{{ d.ghostTop }};height:{{ d.ghostH }};border:2px dashed #7fd0ec;background:rgba(127,208,236,.1)"></div>
+              </sc-if>
+              <sc-for list="{{ d.events }}" as="ev" hint-placeholder-count="2">
+                <div onmouseenter="{{ ev.onEnter }}" onmouseleave="{{ ev.onLeave }}" onclick="{{ ev.onOpen }}" style="position:absolute;left:2px;width:{{ ev.w }};top:{{ ev.top }};height:{{ ev.h }};background:{{ ev.bg }};border-left:4px solid {{ ev.bar }};padding:5px 6px;overflow:hidden;display:flex;flex-direction:column;gap:2px;z-index:{{ ev.z }};box-shadow:{{ ev.shadow }};transition:width .24s cubic-bezier(.4,0,.2,1),box-shadow .24s ease,background-color .24s ease,top .34s cubic-bezier(.4,0,.2,1),height .34s cubic-bezier(.4,0,.2,1)">
+                  <div style="display:flex;align-items:flex-start;gap:5px;min-width:0">
+                    <sc-if value="{{ ev.running }}" hint-placeholder-val="{{ false }}">
+                      <span style="flex:none;width:6px;height:6px;margin-top:4px;background:#F5B942;animation:ttpulse 1.4s steps(2,end) infinite"></span>
+                    </sc-if>
+                    <span style="flex:1;min-width:0;font-size:12px;font-weight:600;line-height:1.2;letter-spacing:.02em;color:{{ ev.titleColor }};text-decoration:{{ ev.strike }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ev.title }}</span>
+                    <sc-if value="{{ ev.showCtl }}" hint-placeholder-val="{{ false }}">
+                      <span style="flex:none;display:flex;align-items:center;gap:5px">
+                        <sc-if value="{{ ev.repeats }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:10px;line-height:1.2;color:{{ ev.bar }}" title="repeats weekly">&#8635;</span>
+                        </sc-if>
+                        <button onclick="{{ ev.onTimer }}" style="width:15px;height:15px;padding:0;display:flex;align-items:center;justify-content:center;background:{{ ev.timerBg }};border:1px solid {{ ev.bar }};color:{{ ev.timerFg }};font-size:8px;line-height:1;cursor:pointer" style-hover="background:{{ ev.bar }};color:#0c0e12">{{ ev.timerGlyph }}</button>
+                      </span>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:nowrap;overflow:hidden;min-width:0">
+                    <span style="flex:0 1 auto;min-width:0;font-size:10.5px;letter-spacing:.04em;color:{{ ev.bar }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ev.time }}</span>
+                    <sc-if value="{{ ev.dotOnly }}" hint-placeholder-val="{{ false }}">
+                      <span style="flex:none;display:flex;align-items:center;gap:3px">
+                        <sc-if value="{{ ev.hasZone }}" hint-placeholder-val="{{ false }}">
+                          <span style="width:4px;height:4px;background:{{ ev.bar }}" title="{{ ev.zoneFull }}"></span>
+                        </sc-if>
+                        <sc-if value="{{ ev.hasEst }}" hint-placeholder-val="{{ false }}">
+                          <span style="width:4px;height:4px;background:{{ ev.estColor }}" title="{{ ev.estLabel }}"></span>
+                        </sc-if>
+                      </span>
+                    </sc-if>
+                    <sc-if value="{{ ev.showChips }}" hint-placeholder-val="{{ false }}">
+                      <span style="flex:none;display:flex;align-items:center;gap:5px">
+                        <sc-if value="{{ ev.hasZone }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:'Silkscreen',monospace;font-size:8px;letter-spacing:.06em;padding:1px 3px;background:rgba(12,19,34,.75);border:1px solid {{ ev.bar }};color:{{ ev.bar }};white-space:nowrap">{{ ev.zone }}</span>
+                        </sc-if>
+                        <sc-if value="{{ ev.hasEst }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:'Silkscreen',monospace;font-size:8px;letter-spacing:.06em;padding:1px 3px;background:{{ ev.estBg }};border:1px solid {{ ev.estEdge }};color:{{ ev.estColor }};white-space:nowrap">{{ ev.estLabel }}</span>
+                        </sc-if>
+                      </span>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANE 2 · TO DO -->
+    <section onclick="{{ focusTodos }}" style="flex:1 1 {{ todoW }};min-width:0;display:flex;flex-direction:column;background:rgba(16,20,27,.9);backdrop-filter:blur(3px);border:2px solid {{ todoBorder }};clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);transition:flex-basis .5s cubic-bezier(.45,0,.2,1),border-color .3s;cursor:pointer">
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 12px;border-bottom:2px solid #1f2530;background:rgba(10,13,20,.72)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:8px;height:8px;background:#FFCF95;flex:none"></span>
+          <span style="font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.12em;color:#e9ecf1">TO DO</span>
+          <span style="font-size:12px;letter-spacing:.06em;color:#6b7280">{{ openCount }}</span>
+        </div>
+      </div>
+
+      <sc-if value="{{ filtered }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 16px;background:{{ filterBg }};border-bottom:2px solid #1f2530">
+          <span style="font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.1em;color:{{ filterColor }}">{{ filterLabel }}</span>
+          <sc-if value="{{ filterPinned }}" hint-placeholder-val="{{ false }}">
+            <button onclick="{{ clearFilter }}" style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:5px 9px;background:transparent;border:2px solid #2f6c96;color:#bfe9f7;cursor:pointer">CLEAR</button>
+          </sc-if>
+        </div>
+      </sc-if>
+
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:6px 14px 18px">
+        <sc-for list="{{ buckets }}" as="b" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:1px;padding-top:14px">
+            <div style="display:flex;align-items:center;gap:9px;padding:0 2px 8px">
+              <span style="font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.12em;color:{{ b.color }}">{{ b.label }}</span>
+              <span style="flex:1;height:2px;background:#1f2530"></span>
+              <span style="font-size:11px;color:#59637a">{{ b.count }}</span>
+            </div>
+            <sc-for list="{{ b.items }}" as="t" hint-placeholder-count="3">
+              <div onpointerdown="{{ t.onDown }}" style="display:flex;align-items:flex-start;gap:11px;padding:9px 8px;background:{{ t.bg }};border-left:3px solid {{ t.edge }};cursor:grab;touch-action:none" style-hover="background:#1b2029">
+                <button onclick="{{ t.onToggle }}" style="flex:none;width:16px;height:16px;margin-top:1px;background:{{ t.boxBg }};border:2px solid {{ t.boxBorder }};padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
+                  <span style="width:6px;height:6px;background:{{ t.tick }}"></span>
+                </button>
+                <sc-if value="{{ t.running }}" hint-placeholder-val="{{ false }}">
+                  <span style="flex:none;width:6px;height:6px;margin-top:6px;background:#F5B942;animation:ttpulse 1.4s steps(2,end) infinite"></span>
+                </sc-if>
+                <span style="flex:1;min-width:0;font-size:13.5px;line-height:1.35;letter-spacing:.01em;color:{{ t.textColor }};text-decoration:{{ t.strike }};text-wrap:pretty">{{ t.text }}</span>
+                <div style="flex:none;display:flex;align-items:center;gap:5px;margin-top:1px">
+                  <sc-if value="{{ t.hasEst }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.06em;padding:3px 5px;background:{{ t.estBg }};border:1px solid {{ t.estEdge }};color:{{ t.estColor }};white-space:nowrap">{{ t.estLabel }}</span>
+                  </sc-if>
+                  <sc-if value="{{ t.hasTag }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.06em;padding:3px 5px;background:#10141c;border:1px solid {{ t.edge }};color:{{ t.edge }};white-space:nowrap">{{ t.tag }}</span>
+                  </sc-if>
+                  <button onclick="{{ t.onTimer }}" style="width:17px;height:17px;padding:0;display:flex;align-items:center;justify-content:center;background:{{ t.timerBg }};border:1px solid {{ t.edge }};color:{{ t.timerFg }};font-size:8px;line-height:1;cursor:pointer" style-hover="background:{{ t.edge }};color:#0c0e12">{{ t.timerGlyph }}</button>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ b.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:10px 11px;font-size:12px;letter-spacing:.03em;color:#4d5669">nothing here</div>
+            </sc-if>
+            <sc-if value="{{ b.composing }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:7px;padding:9px;margin-top:4px;background:#10141c;border:2px solid #2f4a5e">
+                <input ref="{{ composeRef }}" value="{{ composeText }}" onchange="{{ onComposeText }}" onkeydown="{{ onComposeKey }}" placeholder="what needs doing?" style="width:100%;background:transparent;border:none;outline:none;font-size:13.5px;letter-spacing:.01em;color:#e9ecf1;padding:2px 1px" />
+                <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+                  <span style="font-family:'Silkscreen',monospace;font-size:8px;letter-spacing:.1em;color:#59637a;margin-right:3px">DAY</span>
+                  <sc-for list="{{ composeDays }}" as="cd" hint-placeholder-count="8">
+                    <button onclick="{{ cd.onPick }}" style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.04em;padding:4px 6px;background:{{ cd.bg }};border:1px solid {{ cd.edge }};color:{{ cd.color }};cursor:pointer" style-hover="border-color:#7fd0ec">{{ cd.label }}</button>
+                  </sc-for>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;justify-content:flex-end">
+                  <button onclick="{{ cancelCompose }}" style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:6px 9px;background:transparent;border:1px solid #2a3140;color:#6b7280;cursor:pointer" style-hover="border-color:#59637a;color:#98a0ad">CANCEL</button>
+                  <button onclick="{{ submitCompose }}" style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:6px 11px;background:rgba(245,185,66,.16);border:1px solid #F5B942;color:#FFD98A;cursor:pointer" style-hover="background:#F5B942;color:#0c0e12">ADD</button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ b.canAdd }}" hint-placeholder-val="{{ true }}">
+              <button onclick="{{ b.onAdd }}" style="margin-top:4px;text-align:left;padding:8px 11px;background:transparent;border:2px dashed #232936;color:#4d5669;font-size:12px;letter-spacing:.06em;cursor:pointer" style-hover="border-color:#39404f;color:#8b95ab">+ add task</button>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ timerOn }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;display:flex;align-items:center;gap:11px;padding:10px 14px;border-top:2px solid #4a4334;background:rgba(30,26,16,.92)">
+          <span style="flex:none;width:8px;height:8px;background:#F5B942;animation:ttpulse 1.4s steps(2,end) infinite"></span>
+          <span style="flex:1;min-width:0;font-size:12.5px;letter-spacing:.01em;color:#e9ecf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ timerTitle }}</span>
+          <span style="flex:none;font-family:'Silkscreen',monospace;font-size:13px;letter-spacing:.06em;color:{{ timerColor }};font-variant-numeric:tabular-nums">{{ timerClock }}</span>
+          <span style="flex:none;font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.08em;color:{{ timerEstColor }};white-space:nowrap">{{ timerEst }}</span>
+          <button onclick="{{ stopTimer }}" style="flex:none;font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:6px 10px;background:transparent;border:2px solid #F5B942;color:#FFD98A;cursor:pointer" style-hover="background:#F5B942;color:#0c0e12">STOP</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ timerOff }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:none;padding:10px 16px;border-top:2px solid #1f2530;background:rgba(10,13,20,.72);font-size:11px;letter-spacing:.05em;color:#4d5669">drag a task onto the schedule to block time for it</div>
+      </sc-if>
+    </section>
+  </main>
+
+  <sc-if value="{{ dragging }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:{{ dragX }};top:{{ dragY }};transform:translate(12px,-50%);pointer-events:none;z-index:80;display:flex;align-items:center;gap:9px;padding:8px 11px;background:#171b22;border:2px solid {{ dragEdge }};box-shadow:4px 4px 0 rgba(0,0,0,.5)">
+      <span style="width:8px;height:8px;background:{{ dragEdge }}"></span>
+      <span style="font-size:13px;color:#e9ecf1;white-space:nowrap">{{ dragText }}</span>
+    </div>
+  </sc-if>
+
+  <!-- ITEM DETAIL -->
+  <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ closeDetail }}" style="position:fixed;inset:0;z-index:90">
+      <div onclick="{{ swallow }}" style="position:absolute;left:{{ detailX }};top:{{ detailY }};width:318px;max-height:78vh;overflow:auto;background:rgba(12,16,24,.98);border:2px solid #2f4a5e;box-shadow:0 10px 0 rgba(6,10,18,.5);padding:14px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:{{ detailCat }}">{{ detailKind }}</div>
+          <div style="font-size:15px;font-weight:600;line-height:1.25;letter-spacing:.01em;color:#e9ecf1;text-wrap:pretty">{{ detailTitle }}</div>
+          <div style="font-size:11.5px;letter-spacing:.03em;color:#8b95ab">{{ detailWhen }}</div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="{{ detailTimer }}" style="flex:1;font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:8px 10px;background:{{ detailTimerBg }};border:2px solid #F5B942;color:{{ detailTimerFg }};cursor:pointer">{{ detailTimerLabel }}</button>
+          <div style="flex:none;font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.06em;color:#98a0ad;font-variant-numeric:tabular-nums">{{ detailSpent }}</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#59637a">ESTIMATE</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button onclick="{{ estDown }}" style="width:22px;height:22px;padding:0;background:#171b22;border:1px solid #39404f;color:#aab3c6;cursor:pointer" style-hover="border-color:#7fd0ec">&#8722;</button>
+              <span style="min-width:44px;text-align:center;font-size:12.5px;color:#e9ecf1">{{ detailEst }}</span>
+              <button onclick="{{ estUp }}" style="width:22px;height:22px;padding:0;background:#171b22;border:1px solid #39404f;color:#aab3c6;cursor:pointer" style-hover="border-color:#7fd0ec">+</button>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#59637a">SHOW IN TO DO</span>
+            <button onclick="{{ toggleListed }}" style="display:flex;align-items:center;gap:0;width:44px;height:22px;padding:2px;background:{{ listedTrack }};border:1px solid {{ listedEdge }};cursor:pointer;justify-content:{{ listedJustify }}">
+              <span style="width:16px;height:16px;background:{{ listedKnob }}"></span>
+            </button>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#59637a;padding-top:5px">TIME ZONE</span>
+            <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:3px">
+              <sc-for list="{{ zoneOptions }}" as="zo" hint-placeholder-count="4">
+                <button onclick="{{ zo.onPick }}" style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.06em;padding:5px 6px;background:{{ zo.bg }};border:1px solid {{ zo.edge }};color:{{ zo.color }};cursor:pointer" style-hover="border-color:#7fd0ec">{{ zo.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:11px;border-top:1px solid #1f2530">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#F5B942">REPEATS WEEKLY</span>
+            <button onclick="{{ toggleRepeat }}" style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.1em;padding:5px 8px;background:transparent;border:1px solid {{ repeatEdge }};color:{{ repeatColor }};cursor:pointer" style-hover="border-color:#7fd0ec">{{ repeatToggleLabel }}</button>
+          </div>
+          <div style="display:flex;gap:3px">
+            <sc-for list="{{ repeatDays }}" as="rd" hint-placeholder-count="7">
+              <button onclick="{{ rd.onToggle }}" style="flex:1;font-family:'Silkscreen',monospace;font-size:9px;padding:6px 0;background:{{ rd.bg }};border:1px solid {{ rd.edge }};color:{{ rd.color }};cursor:pointer" style-hover="border-color:#7fd0ec">{{ rd.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#59637a">TIME</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button onclick="{{ startDown }}" style="width:22px;height:22px;padding:0;background:#171b22;border:1px solid #39404f;color:#aab3c6;cursor:pointer" style-hover="border-color:#7fd0ec">&#8722;</button>
+              <span style="min-width:86px;text-align:center;font-size:12.5px;color:#e9ecf1">{{ detailRange }}</span>
+              <button onclick="{{ startUp }}" style="width:22px;height:22px;padding:0;background:#171b22;border:1px solid #39404f;color:#aab3c6;cursor:pointer" style-hover="border-color:#7fd0ec">+</button>
+              <button onclick="{{ durDown }}" style="padding:4px 6px;background:#171b22;border:1px solid #39404f;color:#aab3c6;font-family:'Silkscreen',monospace;font-size:8px;cursor:pointer" style-hover="border-color:#7fd0ec">&#8722;LEN</button>
+              <button onclick="{{ durUp }}" style="padding:4px 6px;background:#171b22;border:1px solid #39404f;color:#aab3c6;font-family:'Silkscreen',monospace;font-size:8px;cursor:pointer" style-hover="border-color:#7fd0ec">+LEN</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#59637a">{{ exceptHead }}</span>
+            <sc-if value="{{ hasExcept }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                <sc-for list="{{ exceptions }}" as="ex" hint-placeholder-count="2">
+                  <span style="display:flex;align-items:center;gap:5px;font-size:11.5px;padding:3px 5px;background:#171b22;border:1px solid #39404f;color:#aab3c6">
+                    {{ ex.label }}
+                    <button onclick="{{ ex.onRemove }}" style="padding:0 2px;background:transparent;border:none;color:#6b7280;cursor:pointer;font-size:11px" style-hover="color:#FF8A76">&#215;</button>
+                  </span>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:11px;border-top:1px solid #1f2530">
+          <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.12em;color:#59637a">{{ occHead }}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button onclick="{{ cancelOne }}" style="flex:1;font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.08em;padding:7px 6px;background:#171b22;border:1px solid #39404f;color:#c6ccd6;cursor:pointer" style-hover="border-color:#7fd0ec">CANCEL THIS ONE</button>
+            <button onclick="{{ moveBack }}" style="width:28px;padding:7px 0;background:#171b22;border:1px solid #39404f;color:#c6ccd6;cursor:pointer;font-size:11px" style-hover="border-color:#7fd0ec">&#8249;</button>
+            <span style="font-family:'Silkscreen',monospace;font-size:8px;letter-spacing:.08em;color:#59637a">MOVE</span>
+            <button onclick="{{ moveFwd }}" style="width:28px;padding:7px 0;background:#171b22;border:1px solid #39404f;color:#c6ccd6;cursor:pointer;font-size:11px" style-hover="border-color:#7fd0ec">&#8250;</button>
+          </div>
+          <button onclick="{{ deleteSeries }}" style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.08em;padding:7px 6px;margin-top:5px;background:{{ delBg }};border:1px solid {{ delEdge }};color:{{ delColor }};cursor:pointer" style-hover="border-color:#FF8A76;color:#FF8A76">{{ delLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- TIMEZONE REVIEW -->
+  <sc-if value="{{ tzReviewOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:95;background:rgba(6,9,15,.72);display:flex;align-items:center;justify-content:center;padding:32px">
+      <div style="width:460px;max-width:100%;max-height:80vh;overflow:auto;background:rgba(12,16,24,.99);border:2px solid #2f4a5e;box-shadow:0 12px 0 rgba(6,10,18,.5);clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.14em;color:#F5B942">TIME ZONE CHANGED</div>
+          <div style="font-family:'Silkscreen',monospace;font-size:15px;letter-spacing:.02em;color:#e9ecf1">{{ tzHeadline }}</div>
+          <div style="font-size:12.5px;line-height:1.45;color:#98a0ad;text-wrap:pretty">Your repeating items are listed below. Pinned items keep their original zone's clock time. System items follow wherever you are.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <sc-for list="{{ tzItems }}" as="z" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:11px;padding:10px;background:#171b22;border-left:3px solid {{ z.edge }}">
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:13px;color:#e9ecf1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ z.title }}</span>
+                <span style="font-size:11px;letter-spacing:.03em;color:#6b7280">{{ z.sub }}</span>
+              </span>
+              <button onclick="{{ z.onToggle }}" style="flex:none;font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.08em;padding:6px 9px;background:{{ z.bg }};border:1px solid {{ z.border }};color:{{ z.color }};cursor:pointer" style-hover="border-color:#7fd0ec">{{ z.mode }}</button>
+            </div>
+          </sc-for>
+        </div>
+        <button onclick="{{ closeTzReview }}" style="align-self:flex-end;font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:8px 14px;background:rgba(245,185,66,.16);border:2px solid #F5B942;color:#FFD98A;cursor:pointer" style-hover="background:#F5B942;color:#0c0e12">DONE</button>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startHour&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:8,&quot;min&quot;:0,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Schedule&quot;},&quot;endHour&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:21,&quot;min&quot;:13,&quot;max&quot;:24,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Schedule&quot;}}">
+const HH = 46, SLIM = 17;
+const CAT = { work:'#7fd0ec', life:'#FFCF95', body:'#a8d98f', social:'#ff8a76' };
+const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+const D1 = ['M','T','W','T','F','S','S'];
+const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+// Stored values are IANA zone names. Abbreviations like "CT" are not used as data:
+// they carry no daylight-saving rules, and the offset between these cities is not
+// constant (Austin<->Paris is 7h most of the year, 6h for two shoulder weeks).
+// In production this should be a free field with recent zones offered as chips.
+const ZONES = ['system', 'America/Chicago', 'Europe/Paris', 'Asia/Beirut'];
+
+// Display only. Full IANA name is what gets stored.
+function zLabel(z) {
+  if (!z || z === 'system') return 'SYS';
+  return z.split('/').pop().replace(/_/g, ' ').toUpperCase();
+}
+
+function rgba(hex, a) { const n = parseInt(hex.slice(1), 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
+function blend(hex, a, base) { const n = parseInt(hex.slice(1), 16); const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255]; return 'rgb(' + ch.map((c, i) => Math.round(c * a + base[i] * (1 - a))).join(',') + ')'; }
+function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fromISO(s) { const p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function addDays(d, n) { const c = new Date(d); c.setDate(c.getDate() + n); return c; }
+function dayIdx(d) { return (d.getDay() + 6) % 7; }
+function shortDate(s) { const d = fromISO(s); return MON[d.getMonth()] + ' ' + d.getDate(); }
+function fmtH(h) { const s = h % 12 === 0 ? 12 : Math.floor(h) % 12; return s + (h < 12 || h >= 24 ? ' AM' : ' PM'); }
+function clockShort(h) {
+  const wh = Math.floor(h), m = Math.round((h - wh) * 60);
+  const s = wh % 12 === 0 ? 12 : wh % 12;
+  return s + (m ? ':' + String(m).padStart(2, '0') : '') + (wh < 12 ? 'a' : 'p');
+}
+function fmtRange(s, d) { return clockShort(s) + '–' + clockShort(s + d); }
+function fmtDur(h) {
+  if (h === null || h === undefined) return '—';
+  if (h < 1) return Math.round(h * 60) + 'm';
+  return (Math.round(h * 10) / 10) + 'h';
+}
+function fmtClock(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  return Math.floor(s / 3600) + ':' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+function sysZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'system';
+  } catch (e) { return 'system'; }
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const today = new Date();
+    const mon = addDays(today, -dayIdx(today));
+    const D = n => iso(addDays(mon, n));
+    this.state = {
+      active: 'schedule',
+      sel: null, hoverDay: null, hoverEv: null,
+      week: 0, picker: false,
+      drag: null, hover: null, sbw: 0,
+      now: Date.now(), timer: null,
+      detail: null, confirmDel: null,
+      compose: null, composeText: '', composeDay: null,
+      tzReview: false,
+      warnings: [{ id:'w1', text:'A repeat rule for ORGANIC CHEM LAB couldn\u2019t be rendered \u2014 the series is shown without its skipped dates.' }],
+      items: [
+        { id:'i1', title:'DESIGN STUDIO', cat:'work', tags:['class'], listed:false, done:false, due:null, start:12, dur:1.5, est:null, spent:0, tz:'America/Chicago', repeat:{ days:[1,3], except:[] }, overrides:{} },
+        { id:'i2', title:'STANDUP', cat:'work', tags:['work'], listed:false, done:false, due:null, start:9, dur:1, est:null, spent:0, tz:'system', repeat:{ days:[0,1,2,3,4], except:[] }, overrides:{} },
+        { id:'i3', title:'SWIM PRACTICE', cat:'body', tags:['training'], listed:false, done:false, due:null, start:18, dur:1, est:null, spent:0, tz:'system', repeat:{ days:[0,3], except:[] }, overrides:{} },
+        { id:'i4', title:'Q3 model deep work', cat:'work', tags:['finance'], listed:true, done:false, due:D(0), start:10, dur:2, est:3, spent:5400, tz:'system', repeat:null, overrides:{} },
+        { id:'i5', title:'Dentist', cat:'life', tags:['health'], listed:true, done:false, due:D(2), start:14, dur:1, est:1, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i6', title:'Dinner w/ Sam', cat:'social', tags:[], listed:true, done:false, due:D(1), start:17, dur:2, est:null, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i7', title:'Long run', cat:'body', tags:['training'], listed:true, done:false, due:D(6), start:9, dur:2, est:2, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i8', title:'Farmers market', cat:'life', tags:[], listed:false, done:false, due:D(5), start:10, dur:2, est:null, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i9', title:'Reply to the landlord about the lease', cat:'life', tags:['admin'], listed:true, done:false, due:iso(today), start:null, dur:1, est:0.5, spent:600, tz:'system', repeat:null, overrides:{} },
+        { id:'i10', title:'Pick up prescription', cat:'life', tags:['health'], listed:true, done:false, due:D(2), start:null, dur:1, est:0.5, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i11', title:'Send Maya the Q3 numbers', cat:'work', tags:['finance'], listed:true, done:true, due:D(1), start:null, dur:1, est:1, spent:3200, tz:'system', repeat:null, overrides:{} },
+        { id:'i12', title:'Draft the newsletter intro', cat:'work', tags:['writing'], listed:true, done:false, due:D(3), start:null, dur:1, est:1.5, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i13', title:'Patch the bike tire', cat:'body', tags:[], listed:true, done:false, due:D(5), start:null, dur:1, est:0.5, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i14', title:'Return the blue jacket', cat:'life', tags:['errand'], listed:true, done:false, due:D(4), start:null, dur:1, est:null, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i15', title:'Chase the deposit refund', cat:'life', tags:['admin'], listed:true, done:false, due:iso(addDays(today, -2)), start:null, dur:1, est:null, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i16', title:'Book October flights', cat:'life', tags:['travel'], listed:true, done:false, due:iso(addDays(today, 24)), start:null, dur:1, est:1, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i17', title:'Learn to free dive', cat:'body', tags:['someday'], listed:true, done:false, due:null, start:null, dur:1, est:null, spent:0, tz:'system', repeat:null, overrides:{} },
+        { id:'i18', title:'Repaint the back deck', cat:'life', tags:['home'], listed:true, done:false, due:null, start:null, dur:1, est:4, spent:0, tz:'system', repeat:null, overrides:{} }
+      ]
+    };
+  }
+
+  // ---------- refs / measurement ----------
+  gridRef = el => { this.grid = el; if (el) this.measure(); };
+  composeRef = el => { if (el && this._focusCompose) { this._focusCompose = false; el.focus(); } };
+
+  componentDidMount() {
+    this.measure();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.forceUpdate());
+    this._onResize = () => this.measure();
+    window.addEventListener('resize', this._onResize);
+    this._int = setInterval(() => { if (this.state.timer) this.setState({ now: Date.now() }); }, 1000);
+    const zone = sysZone();
+    let seen = null;
+    try { seen = window.localStorage.getItem('tt.zone'); } catch (e) {}
+    if (seen && seen !== zone) this.setState({ tzReview: true });
+    try { window.localStorage.setItem('tt.zone', zone); } catch (e) {}
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
+    clearInterval(this._int);
+    clearTimeout(this._dayTimer);
+  }
+
+  measure() {
+    const el = this.grid;
+    if (!el) return;
+    const sb = el.offsetWidth - el.clientWidth;
+    if (sb !== this.state.sbw) this.setState({ sbw: sb });
+  }
+
+  titleW(text) {
+    if (!this._ctx) this._ctx = document.createElement('canvas').getContext('2d');
+    this._ctx.font = "600 12px 'Inconsolata', monospace";
+    return Math.ceil(this._ctx.measureText(text).width) + 62;
+  }
+
+  // ---------- item helpers ----------
+  patch(id, fn) {
+    this.setState(s => ({ items: s.items.map(it => it.id === id ? Object.assign({}, it, fn(it)) : it) }));
+  }
+
+  elapsed(it) {
+    const t = this.state.timer;
+    const live = t && t.id === it.id ? (this.state.now - t.startedAt) / 1000 : 0;
+    return (it.spent || 0) + live;
+  }
+
+  over(it) { return it.est ? this.elapsed(it) > it.est * 3600 : false; }
+
+  toggleTimer = id => e => {
+    e.stopPropagation();
+    const s = this.state, t = s.timer;
+    if (t && t.id === id) {
+      const add = (Date.now() - t.startedAt) / 1000;
+      this.setState(st => ({ timer: null, items: st.items.map(it => it.id === id ? Object.assign({}, it, { spent: (it.spent || 0) + add }) : it) }));
+      return;
+    }
+    if (t) {
+      const add = (Date.now() - t.startedAt) / 1000;
+      this.setState(st => ({
+        items: st.items.map(it => it.id === t.id ? Object.assign({}, it, { spent: (it.spent || 0) + add }) : it),
+        timer: { id: id, startedAt: Date.now() }, now: Date.now()
+      }));
+      return;
+    }
+    this.setState({ timer: { id: id, startedAt: Date.now() }, now: Date.now() });
+  };
+
+  toggleDone = id => e => {
+    e.stopPropagation();
+    this.patch(id, it => ({ done: !it.done }));
+  };
+
+  // ---------- drag ----------
+  onItemDown = it => e => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    let moved = false;
+    const sx = e.clientX, sy = e.clientY;
+    const move = ev => {
+      if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 5) return;
+      moved = true;
+      this.setState({ drag: { id: it.id, text: it.title, cat: it.cat, x: ev.clientX, y: ev.clientY }, hover: this.cellAt(ev.clientX, ev.clientY) });
+    };
+    const up = ev => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (!moved) { this.openDetail(it.id, null, ev.clientX, ev.clientY); return; }
+      const cell = this.cellAt(ev.clientX, ev.clientY);
+      if (cell) {
+        const date = iso(addDays(this.monday(), cell.day));
+        this.patch(it.id, () => ({ due: date, start: cell.hour, dur: 1 }));
+      }
+      this.setState({ drag: null, hover: null });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  cellAt(x, y) {
+    const el = this.grid;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (y < r.top || y > r.bottom) return null;
+    const row = el.firstElementChild;
+    if (!row) return null;
+    const cols = Array.prototype.slice.call(row.children, 1);
+    let day = -1;
+    cols.forEach((c, i) => { const cr = c.getBoundingClientRect(); if (x >= cr.left && x <= cr.right) day = i; });
+    if (day < 0) return null;
+    const relY = y - r.top + el.scrollTop;
+    const rows = this._rows || [];
+    let hour = -1;
+    const sh0 = this.props.startHour ?? 8;
+    rows.forEach((rw, i) => { if (relY >= rw.t && relY < rw.t + rw.hp) hour = sh0 + i; });
+    if (hour < 0) return null;
+    return { day: day, hour: hour };
+  }
+
+  // ---------- detail ----------
+  openDetail(id, occIso, x, y) {
+    const W = window.innerWidth, H = window.innerHeight;
+    this.setState({
+      detail: { id: id, iso: occIso, x: Math.min(Math.max(12, x - 40), W - 330), y: Math.min(Math.max(12, y - 30), Math.max(12, H - 560)) },
+      confirmDel: null, picker: false
+    });
+  }
+
+  monday() {
+    const today = new Date();
+    return addDays(addDays(today, -dayIdx(today)), this.state.week * 7);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const today = new Date(), todayISO = iso(today);
+    const mon = this.monday();
+    const weekISO = [];
+    for (let i = 0; i < 7; i++) weekISO.push(iso(addDays(mon, i)));
+    const zone = sysZone();
+    const byId = {};
+    s.items.forEach(it => { byId[it.id] = it; });
+
+    // ---------- occurrences for the displayed week ----------
+    const occ = [[], [], [], [], [], [], []];
+    s.items.forEach(it => {
+      if (it.repeat) {
+        weekISO.forEach((dISO, i) => {
+          const ov = it.overrides[dISO] || {};
+          if (it.repeat.except.indexOf(dISO) >= 0) return;
+          if (ov.moved) {
+            const tgt = weekISO.indexOf(ov.moved);
+            if (tgt >= 0) occ[tgt].push({ it: it, iso: ov.moved, srcIso: dISO, start: ov.start ?? it.start, dur: ov.dur ?? it.dur, rep: true });
+            return;
+          }
+          if (it.repeat.days.indexOf(i) < 0) return;
+          occ[i].push({ it: it, iso: dISO, srcIso: dISO, start: ov.start ?? it.start, dur: ov.dur ?? it.dur, rep: true });
+        });
+      } else if (it.due && it.start !== null) {
+        const i = weekISO.indexOf(it.due);
+        if (i >= 0) occ[i].push({ it: it, iso: it.due, srcIso: it.due, start: it.start, dur: it.dur, rep: false });
+      }
+    });
+
+    // ---------- collapsing hour rows ----------
+    const sh = this.props.startHour ?? 8, eh = this.props.endHour ?? 21;
+    const rows = [];
+    let off = 0;
+    for (let h = sh; h < eh; h++) {
+      let busy = false;
+      occ.forEach(list => list.forEach(o => { if (o.start < h + 1 && h < o.start + o.dur) busy = true; }));
+      const hp = busy ? HH : SLIM;
+      rows.push({ t: off, hp: hp, h: hp + 'px', busy: busy, label: busy ? fmtH(h) : clockShort(h), labelSize: busy ? '11px' : '9px', labelColor: busy ? '#59637a' : '#39404f' });
+      off += hp;
+    }
+    this._rows = rows;
+    const rowTop = i => {
+      if (i <= 0) return 0;
+      if (i >= rows.length) return off;
+      const k = Math.floor(i), fr = i - k;
+      return rows[k].t + rows[k].hp * fr;
+    };
+
+    const filterISO = s.sel !== null ? weekISO[s.sel] : (s.hoverDay !== null ? weekISO[s.hoverDay] : null);
+    const filterIdx = s.sel !== null ? s.sel : s.hoverDay;
+
+    // ---------- day columns ----------
+    const days = DAYS.map((label, i) => {
+      const d = addDays(mon, i);
+      const dISO = weekISO[i];
+      const isSel = s.sel === i;
+      const isToday = dISO === todayISO;
+      const isWknd = i > 4;
+      const isHot = s.hoverDay === i;
+      const wide = s.hoverDay !== null ? isHot : isToday;
+      const GOLD = '#F5B942', GOLD_LT = '#FFD98A';
+      return {
+        label: label, date: String(d.getDate()),
+        onClick: e => { e.stopPropagation(); this.setState(st => ({ active:'todos', sel: st.sel === i ? null : i, picker:false })); },
+        onEnter: () => { clearTimeout(this._dayTimer); this._dayTimer = setTimeout(() => this.setState({ hoverDay: i }), 1000); },
+        onLeave: () => { clearTimeout(this._dayTimer); this.setState(st => (st.hoverDay === i ? { hoverDay: null } : null)); },
+        headBg: isSel ? '#0f3a5e' : (isToday ? 'rgba(245,185,66,.055)' : (isHot ? 'rgba(207,234,246,.06)' : 'transparent')),
+        underline: isSel ? '#7fd0ec' : 'transparent',
+        labelColor: isSel ? '#bfe9f7' : (isToday ? GOLD : (isHot ? '#dff0fa' : (isWknd ? '#59637a' : '#98a0ad'))),
+        dateColor: isSel ? '#e9ecf1' : (isToday ? GOLD_LT : (isHot ? '#f2f8fc' : (isWknd ? '#6b7280' : '#c6ccd6'))),
+        flex: wide ? 1.5 : 1,
+        colBg: isToday ? 'rgba(245,185,66,.055)' : (isHot ? 'rgba(207,234,246,.045)' : 'transparent'),
+        rows: rows,
+        ghost: !!(s.hover && s.hover.day === i),
+        ghostTop: s.hover && s.hover.day === i ? (rowTop(s.hover.hour - sh) + 1) + 'px' : '0px',
+        ghostH: s.hover && s.hover.day === i ? (rowTop(s.hover.hour - sh + 1) - rowTop(s.hover.hour - sh) - 3) + 'px' : '0px',
+        events: occ[i].map(o => {
+          const it = o.it, c = CAT[it.cat] || CAT.work;
+          const hot = s.hoverEv === it.id + '@' + o.iso;
+          const running = !!(s.timer && s.timer.id === it.id);
+          const ovr = this.over(it);
+          const pinned = it.tz !== 'system' && it.tz !== zone;
+          return {
+            title: it.title, time: fmtRange(o.start, o.dur), bar: c,
+            titleColor: it.done ? '#6b7280' : '#e9ecf1',
+            strike: it.done ? 'line-through' : 'none',
+            bg: hot ? blend(c, .13, [20, 23, 29]) : rgba(c, .13),
+            top: (rowTop(o.start - sh) + 1) + 'px',
+            h: (rowTop(o.start - sh + o.dur) - rowTop(o.start - sh) - 4) + 'px',
+            w: hot ? 'max(calc(100% - 5px),' + (this.titleW(it.title) + (it.est ? 46 : 0) + (pinned ? 34 : 0)) + 'px)' : 'calc(100% - 5px)',
+            z: hot ? 30 : 1,
+            shadow: hot ? '0 0 0 1px rgba(245,185,66,.45),0 0 16px rgba(245,185,66,.3)' : 'none',
+            clip: hot ? 'clip' : 'ellipsis',
+            repeats: o.rep, running: running,
+            showCtl: hot || running,
+            showChips: hot,
+            dotOnly: !hot && (!!it.est || pinned),
+            hasZone: pinned, zone: zLabel(it.tz), zoneFull: it.tz,
+            hasEst: !!it.est, estLabel: ovr ? 'OVER' : '~' + fmtDur(it.est),
+            estBg: ovr ? 'rgba(255,138,118,.16)' : 'rgba(12,19,34,.75)',
+            estEdge: ovr ? '#FF8A76' : '#39404f',
+            estColor: ovr ? '#FF8A76' : '#98a0ad',
+            timerGlyph: running ? '\u25A0' : '\u25B6',
+            timerBg: running ? c : 'transparent',
+            timerFg: running ? '#0c0e12' : c,
+            onTimer: this.toggleTimer(it.id),
+            onOpen: e => { e.stopPropagation(); this.openDetail(it.id, o.srcIso, e.clientX, e.clientY); },
+            onEnter: () => this.setState({ hoverEv: it.id + '@' + o.iso }),
+            onLeave: () => this.setState(st => (st.hoverEv === it.id + '@' + o.iso ? { hoverEv: null } : null))
+          };
+        })
+      };
+    });
+
+    // ---------- derived buckets ----------
+    const weekEnd = iso(addDays(addDays(today, -dayIdx(today)), 6));
+    const bucketOf = it => {
+      if (!it.due) return 'someday';
+      if (it.due <= todayISO) return 'today';
+      if (it.due <= weekEnd) return 'week';
+      return 'someday';
+    };
+    const defs = [
+      { id:'today', label:'TODAY', color:'#FFCF95' },
+      { id:'week', label:'THIS WEEK', color:'#7fd0ec' },
+      { id:'someday', label:'SOMEDAY', color:'#8b95ab' }
+    ];
+    const listed = s.items.filter(it => it.listed);
+    const buckets = defs.map(def => {
+      let items = listed.filter(it => bucketOf(it) === def.id);
+      if (filterISO) items = items.filter(it => it.due === filterISO);
+      return {
+        label: def.label, color: def.color,
+        count: items.filter(it => !it.done).length + ' open',
+        empty: items.length === 0,
+        composing: s.compose === def.id,
+        canAdd: s.compose !== def.id,
+        onAdd: e => { e.stopPropagation(); this._focusCompose = true; this.setState({ compose: def.id, composeText: '', composeDay: def.id === 'someday' ? null : (filterIdx !== null ? filterIdx : dayIdx(today)) }); },
+        items: items.map(it => {
+          const c = CAT[it.cat] || CAT.work;
+          const running = !!(s.timer && s.timer.id === it.id);
+          const ovr = this.over(it);
+          return {
+            text: it.title, onToggle: this.toggleDone(it.id), onDown: this.onItemDown(it),
+            bg: it.done ? '#12151b' : '#171b22', edge: it.done ? '#2a3140' : c,
+            boxBg: it.done ? c : 'transparent', boxBorder: it.done ? c : '#39404f',
+            tick: it.done ? '#0c0e12' : 'transparent',
+            textColor: it.done ? '#59637a' : '#e9ecf1',
+            strike: it.done ? 'line-through' : 'none',
+            running: running,
+            hasTag: !!it.due, tag: it.due ? (it.due === todayISO ? 'TODAY' : DAYS[dayIdx(fromISO(it.due))]) : '',
+            hasEst: !!it.est, estLabel: ovr ? 'OVER' : '~' + fmtDur(it.est),
+            estBg: ovr ? 'rgba(255,138,118,.16)' : '#10141c',
+            estEdge: ovr ? '#FF8A76' : '#39404f',
+            estColor: ovr ? '#FF8A76' : '#98a0ad',
+            timerGlyph: running ? '\u25A0' : '\u25B6',
+            timerBg: running ? c : 'transparent',
+            timerFg: running ? '#0c0e12' : c,
+            onTimer: this.toggleTimer(it.id)
+          };
+        })
+      };
+    });
+
+    // ---------- compose ----------
+    const composeDays = [{ label:'NONE', idx:null }].concat(DAYS.map((d, i) => ({ label: D1[i] + (i + 1), idx: i })));
+    const composeChips = composeDays.map(cd => {
+      const on = s.composeDay === cd.idx;
+      return {
+        label: cd.label,
+        bg: on ? 'rgba(127,208,236,.16)' : 'transparent',
+        edge: on ? '#7fd0ec' : '#2a3140',
+        color: on ? '#bfe9f7' : '#6b7280',
+        onPick: e => { e.stopPropagation(); this.setState({ composeDay: cd.idx }); }
+      };
+    });
+    const submitCompose = e => {
+      if (e && e.stopPropagation) e.stopPropagation();
+      const text = (s.composeText || '').trim();
+      if (!text) { this.setState({ compose: null }); return; }
+      const due = s.composeDay === null ? null : weekISO[s.composeDay];
+      this.setState(st => ({
+        items: st.items.concat([{ id:'n' + Date.now(), title:text, cat:'life', tags:[], listed:true, done:false, due:due, start:null, dur:1, est:null, spent:0, tz:'system', repeat:null, overrides:{} }]),
+        compose: null, composeText: '', composeDay: null
+      }));
+    };
+
+    // ---------- timer bar ----------
+    const running = s.timer ? byId[s.timer.id] : null;
+    const runEl = running ? this.elapsed(running) : 0;
+    const runOver = running ? this.over(running) : false;
+
+    // ---------- detail ----------
+    const dt = s.detail ? byId[s.detail.id] : null;
+    const dtOcc = dt && s.detail.iso ? s.detail.iso : (dt ? dt.due : null);
+    const dtRunning = !!(dt && s.timer && s.timer.id === dt.id);
+    const detailVals = dt ? {
+      detailOpen: true,
+      detailX: s.detail.x + 'px', detailY: s.detail.y + 'px',
+      detailTitle: dt.title,
+      detailCat: CAT[dt.cat] || CAT.work,
+      detailKind: (dt.repeat ? 'REPEATING · ' : '') + dt.cat.toUpperCase() + (dt.tags.length ? ' · ' + dt.tags.join(' · ').toUpperCase() : ''),
+      detailWhen: dt.start !== null ? (dtOcc ? shortDate(dtOcc) + ' · ' : '') + fmtRange(dt.start, dt.dur) + (dt.tz !== 'system' ? ' ' + zLabel(dt.tz) : '') : (dt.due ? 'due ' + shortDate(dt.due) + ' · no time set' : 'no date, no time'),
+      detailSpent: fmtClock(this.elapsed(dt)),
+      detailTimerLabel: dtRunning ? 'STOP TIMER' : 'START TIMER',
+      detailTimerBg: dtRunning ? '#F5B942' : 'rgba(245,185,66,.14)',
+      detailTimerFg: dtRunning ? '#0c0e12' : '#FFD98A',
+      detailTimer: this.toggleTimer(dt.id),
+      detailEst: dt.est ? '~' + fmtDur(dt.est) : 'none',
+      estUp: e => { e.stopPropagation(); this.patch(dt.id, it => ({ est: Math.min(12, (it.est || 0) + 0.5) })); },
+      estDown: e => { e.stopPropagation(); this.patch(dt.id, it => ({ est: it.est && it.est > 0.5 ? it.est - 0.5 : null })); },
+      listedTrack: dt.listed ? 'rgba(245,185,66,.22)' : '#171b22',
+      listedEdge: dt.listed ? '#F5B942' : '#39404f',
+      listedKnob: dt.listed ? '#F5B942' : '#4d5669',
+      listedJustify: dt.listed ? 'flex-end' : 'flex-start',
+      toggleListed: e => { e.stopPropagation(); this.patch(dt.id, it => ({ listed: !it.listed })); },
+      zoneOptions: ZONES.map(z => ({
+        label: zLabel(z),
+        bg: dt.tz === z ? 'rgba(127,208,236,.16)' : 'transparent',
+        edge: dt.tz === z ? '#7fd0ec' : '#2a3140',
+        color: dt.tz === z ? '#bfe9f7' : '#6b7280',
+        onPick: e => { e.stopPropagation(); this.patch(dt.id, () => ({ tz: z })); }
+      })),
+      repeatToggleLabel: dt.repeat ? 'TURN OFF' : 'TURN ON',
+      repeatEdge: dt.repeat ? '#F5B942' : '#2a3140',
+      repeatColor: dt.repeat ? '#FFD98A' : '#6b7280',
+      toggleRepeat: e => {
+        e.stopPropagation();
+        this.patch(dt.id, it => it.repeat ? { repeat: null } : { repeat: { days: [dtOcc ? dayIdx(fromISO(dtOcc)) : dayIdx(today)], except: [] }, start: it.start === null ? 9 : it.start });
+      },
+      repeatDays: D1.map((lb, i) => {
+        const on = !!(dt.repeat && dt.repeat.days.indexOf(i) >= 0);
+        return {
+          label: lb,
+          bg: on ? 'rgba(245,185,66,.18)' : 'transparent',
+          edge: on ? '#F5B942' : '#2a3140',
+          color: on ? '#FFD98A' : '#6b7280',
+          onToggle: e => {
+            e.stopPropagation();
+            this.patch(dt.id, it => {
+              const rp = it.repeat || { days: [], except: [] };
+              const days = rp.days.indexOf(i) >= 0 ? rp.days.filter(d => d !== i) : rp.days.concat([i]).sort();
+              return { repeat: Object.assign({}, rp, { days: days }), start: it.start === null ? 9 : it.start };
+            });
+          }
+        };
+      }),
+      detailRange: dt.start !== null ? fmtRange(dt.start, dt.dur) : 'no time',
+      startUp: e => { e.stopPropagation(); this.patch(dt.id, it => ({ start: Math.min(20, (it.start === null ? 8 : it.start) + 0.5) })); },
+      startDown: e => { e.stopPropagation(); this.patch(dt.id, it => ({ start: Math.max(0, (it.start === null ? 9 : it.start) - 0.5) })); },
+      durUp: e => { e.stopPropagation(); this.patch(dt.id, it => ({ dur: Math.min(8, it.dur + 0.5) })); },
+      durDown: e => { e.stopPropagation(); this.patch(dt.id, it => ({ dur: Math.max(0.5, it.dur - 0.5) })); },
+      exceptHead: dt.repeat && dt.repeat.except.length ? 'EXCEPT ON THESE DATES' : 'EXCEPT ON THESE DATES — NONE YET',
+      hasExcept: !!(dt.repeat && dt.repeat.except.length),
+      exceptions: (dt.repeat ? dt.repeat.except : []).map(x => ({
+        label: shortDate(x),
+        onRemove: e => { e.stopPropagation(); this.patch(dt.id, it => ({ repeat: Object.assign({}, it.repeat, { except: it.repeat.except.filter(v => v !== x) }) })); }
+      })),
+      occHead: dt.repeat ? 'THIS OCCURRENCE ONLY' + (dtOcc ? ' · ' + shortDate(dtOcc) : '') : 'THIS ITEM',
+      cancelOne: e => {
+        e.stopPropagation();
+        if (dt.repeat && dtOcc) this.patch(dt.id, it => ({ repeat: Object.assign({}, it.repeat, { except: it.repeat.except.concat([dtOcc]) }) }));
+        else this.patch(dt.id, () => ({ start: null }));
+        this.setState({ detail: null });
+      },
+      moveBack: e => {
+        e.stopPropagation();
+        if (dt.repeat && dtOcc) {
+          const tgt = iso(addDays(fromISO(dtOcc), -1));
+          this.patch(dt.id, it => ({ overrides: Object.assign({}, it.overrides, { [dtOcc]: { moved: tgt } }) }));
+          this.setState(st => ({ detail: Object.assign({}, st.detail, { iso: dtOcc }) }));
+        } else if (dt.due) {
+          this.patch(dt.id, it => ({ due: iso(addDays(fromISO(it.due), -1)) }));
+        }
+      },
+      moveFwd: e => {
+        e.stopPropagation();
+        if (dt.repeat && dtOcc) {
+          const tgt = iso(addDays(fromISO(dtOcc), 1));
+          this.patch(dt.id, it => ({ overrides: Object.assign({}, it.overrides, { [dtOcc]: { moved: tgt } }) }));
+        } else if (dt.due) {
+          this.patch(dt.id, it => ({ due: iso(addDays(fromISO(it.due), 1)) }));
+        }
+      },
+      delLabel: s.confirmDel === dt.id ? (dt.repeat ? 'CONFIRM · DELETE WHOLE SERIES' : 'CONFIRM · DELETE ITEM') : (dt.repeat ? 'DELETE WHOLE SERIES\u2026' : 'DELETE ITEM\u2026'),
+      delBg: s.confirmDel === dt.id ? 'rgba(255,138,118,.16)' : 'transparent',
+      delEdge: s.confirmDel === dt.id ? '#FF8A76' : '#2a3140',
+      delColor: s.confirmDel === dt.id ? '#FF8A76' : '#8b95ab',
+      deleteSeries: e => {
+        e.stopPropagation();
+        if (s.confirmDel !== dt.id) { this.setState({ confirmDel: dt.id }); return; }
+        this.setState(st => ({ items: st.items.filter(it => it.id !== dt.id), detail: null, confirmDel: null, timer: st.timer && st.timer.id === dt.id ? null : st.timer }));
+      }
+    } : { detailOpen: false };
+
+    // ---------- timezone review ----------
+    const tzItems = s.items.filter(it => it.repeat).map(it => {
+      const pinned = it.tz !== 'system';
+      return {
+        title: it.title,
+        sub: pinned ? 'pinned to ' + it.tz + ' · ' + fmtRange(it.start, it.dur) + ' ' + zLabel(it.tz) : 'system time · ' + fmtRange(it.start, it.dur) + ' wherever you are',
+        edge: pinned ? '#F5B942' : '#7fd0ec',
+        mode: pinned ? 'PINNED ' + zLabel(it.tz) : 'SYSTEM',
+        bg: pinned ? 'rgba(245,185,66,.14)' : 'rgba(127,208,236,.12)',
+        border: pinned ? '#F5B942' : '#7fd0ec',
+        color: pinned ? '#FFD98A' : '#bfe9f7',
+        onToggle: e => { e.stopPropagation(); this.patch(it.id, cur => ({ tz: cur.tz === 'system' ? zone : 'system' })); }
+      };
+    });
+
+    return Object.assign({
+      weekTitle: 'WEEK OF ' + MON[mon.getMonth()] + ' ' + mon.getDate(),
+      zoneLabel: zLabel(zone),
+      openTzReview: e => { e.stopPropagation(); this.setState({ tzReview: true }); },
+      prevWeek: e => { e.stopPropagation(); this.setState(st => ({ week: st.week - 1 })); },
+      nextWeek: e => { e.stopPropagation(); this.setState(st => ({ week: st.week + 1 })); },
+      togglePicker: e => { e.stopPropagation(); this.setState(st => ({ picker: !st.picker })); },
+      pickerOpen: s.picker,
+      pickerBg: s.picker ? 'rgba(20,44,64,.95)' : 'rgba(12,19,34,.72)',
+      pickerBorder: s.picker ? '#7fd0ec' : 'rgba(207,234,246,.3)',
+      weeks: Array.from({ length: 33 }, (_, k) => k - 4).map(offw => {
+        const a = addDays(addDays(today, -dayIdx(today)), offw * 7);
+        const b = addDays(a, 6);
+        const cur = offw === s.week;
+        return {
+          range: MON[a.getMonth()] + ' ' + a.getDate() + ' – ' + MON[b.getMonth()] + ' ' + b.getDate(),
+          rel: offw === 0 ? 'THIS WEEK' : (offw === 1 ? 'NEXT WEEK' : (offw === -1 ? 'LAST WEEK' : (offw > 0 ? '+' + offw + ' WKS' : offw + ' WKS'))),
+          bg: cur ? '#16283a' : 'transparent',
+          edge: cur ? '#7fd0ec' : (offw === 0 ? '#F5B942' : 'transparent'),
+          color: cur ? '#e9ecf1' : '#aab3c6',
+          relColor: offw === 0 ? '#F5B942' : '#59637a',
+          onPick: e => { e.stopPropagation(); this.setState({ week: offw, picker: false }); }
+        };
+      }),
+
+      hasWarnings: s.warnings.length > 0,
+      warnings: s.warnings.map(w => ({ text: w.text, onDismiss: e => { e.stopPropagation(); this.setState(st => ({ warnings: st.warnings.filter(x => x.id !== w.id) })); } })),
+
+      focusSchedule: () => this.setState({ active:'schedule', picker:false }),
+      focusTodos: () => this.setState({ active:'todos', picker:false }),
+      schedW: s.active === 'schedule' ? '64%' : '38%',
+      todoW: s.active === 'schedule' ? '36%' : '62%',
+      schedBorder: s.active === 'schedule' ? '#2f4a5e' : '#1f2530',
+      todoBorder: s.active === 'todos' ? '#4a4334' : '#1f2530',
+      blockCount: occ.reduce((n, l) => n + l.length, 0) + ' blocks',
+      openCount: listed.filter(it => !it.done).length + ' open',
+
+      rows: rows, days: days, buckets: buckets,
+      gridRef: this.gridRef, gutter: 52, gridH: off + 'px',
+      headPad: (12 + (s.sbw || 0)) + 'px',
+
+      filtered: filterISO !== null,
+      filterPinned: s.sel !== null,
+      filterBg: s.sel !== null ? '#0f3a5e' : 'rgba(20,32,45,.9)',
+      filterColor: s.sel !== null ? '#bfe9f7' : '#8fbcd6',
+      filterLabel: filterIdx !== null ? (s.sel !== null ? 'FILTERED · ' : 'PEEKING · ') + DAYS[filterIdx] + ' ' + fromISO(weekISO[filterIdx]).getDate() : '',
+      clearFilter: e => { e.stopPropagation(); this.setState({ sel: null }); },
+
+
+      composeText: s.composeText,
+      composeRef: this.composeRef,
+      onComposeText: e => this.setState({ composeText: e.target.value }),
+      onComposeKey: e => { if (e.key === 'Enter') submitCompose(e); if (e.key === 'Escape') this.setState({ compose: null }); },
+      composeDays: composeChips,
+      submitCompose: submitCompose,
+      cancelCompose: e => { e.stopPropagation(); this.setState({ compose: null, composeText: '' }); },
+
+      timerOn: !!running,
+      timerOff: !running,
+      timerTitle: running ? running.title : '',
+      timerClock: running ? fmtClock(runEl) : '0:00:00',
+      timerColor: runOver ? '#FF8A76' : '#FFD98A',
+      timerEst: running ? (running.est ? (runOver ? 'OVER ~' + fmtDur(running.est) : 'OF ~' + fmtDur(running.est)) : 'NO ESTIMATE') : '',
+      timerEstColor: runOver ? '#FF8A76' : '#8b95ab',
+      stopTimer: running ? this.toggleTimer(running.id) : () => {},
+
+      dragging: !!s.drag,
+      dragText: s.drag ? s.drag.text : '',
+      dragEdge: s.drag ? (CAT[s.drag.cat] || CAT.work) : CAT.work,
+      dragX: s.drag ? s.drag.x + 'px' : '0px',
+      dragY: s.drag ? s.drag.y + 'px' : '0px',
+
+      closeDetail: () => this.setState({ detail: null, confirmDel: null }),
+      swallow: e => e.stopPropagation(),
+
+      tzReviewOpen: s.tzReview,
+      tzHeadline: 'You\u2019re now on ' + zLabel(zone),
+      tzItems: tzItems,
+      closeTzReview: e => { e.stopPropagation(); this.setState({ tzReview: false }); }
+    }, detailVals);
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,674 @@
+/* Tokens from the Tide Table design handoff. Radius is 0 everywhere; corners
+   are notched with clip-path instead. */
+:root {
+  --page: #0c0e12;
+  --pane: rgba(16, 20, 27, 0.9);
+  --subbar: rgba(10, 13, 20, 0.72);
+  --row: #171b22;
+  --row-done: #12151b;
+  --row-hover: #1b2029;
+
+  --line: #1f2530;
+  --line-col: #1c2029;
+  --line-hour: #1a1e27;
+  --line-dash: #232936;
+  --line-box: #39404f;
+  --edge-schedule: #2f4a5e;
+  --edge-todo: #4a4334;
+
+  --text: #e9ecf1;
+  --text-2: #c6ccd6;
+  --text-3: #aab3c6;
+  --muted: #98a0ad;
+  --dim: #6b7280;
+  --dimmer: #59637a;
+  --faint: #4d5669;
+  --on-sky: #e2f1fa;
+  --on-blue: #bfe9f7;
+
+  --gold: #f5b942;
+  --gold-light: #ffd98a;
+  --sand: #ffcf95;
+  --cyan: #7fd0ec;
+  --coral: #ff8a76;
+  --green: #a8d98f;
+
+  --row-h: 46px;
+  --row-h-collapsed: 17px;
+  --gutter: 52px;
+
+  --ease-pane: cubic-bezier(0.45, 0, 0.2, 1);
+  --ease-row: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+
+/* `hidden` must beat the display rules below it: .overlay, .timerBar and
+   #diagnostics all set display, which would otherwise show them regardless. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--page);
+  color: var(--text);
+  font-family: Inconsolata, ui-monospace, monospace;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 20px;
+  gap: 14px;
+  position: relative;
+}
+
+#sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  image-rendering: pixelated;
+}
+
+.pixel { font-family: Silkscreen, Inconsolata, monospace; }
+
+/* ── header ─────────────────────────────────────────────────────────── */
+#bar {
+  position: relative;
+  z-index: 60;
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  -webkit-app-region: drag;
+}
+#bar .left { display: flex; align-items: center; gap: 10px; }
+#bar button { -webkit-app-region: no-drag; }
+
+#weekTitle {
+  font-family: Silkscreen, monospace;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+  color: var(--gold);
+  /* The sky band behind the header is light at midday. */
+  text-shadow: 0 2px 0 rgba(8, 14, 26, 0.55);
+}
+
+.chip {
+  font-family: Silkscreen, monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 4px 7px;
+  background: rgba(12, 19, 34, 0.6);
+  border: 1px solid rgba(207, 234, 246, 0.28);
+  color: var(--on-blue);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--cyan); }
+
+.nav { display: flex; align-items: center; gap: 8px; }
+
+.btn {
+  font-family: Silkscreen, monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 8px 12px;
+  background: rgba(12, 19, 34, 0.72);
+  border: 2px solid rgba(207, 234, 246, 0.3);
+  color: var(--on-sky);
+  cursor: pointer;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+.btn:hover { border-color: var(--cyan); color: var(--text); }
+.btn.wide { padding: 8px 14px; }
+
+/* ── diagnostics ────────────────────────────────────────────────────── */
+#diagnostics {
+  position: relative;
+  z-index: 20;
+  flex: none;
+  padding: 9px 14px;
+  background: rgba(40, 32, 12, 0.9);
+  border: 2px solid #4a4334;
+  color: var(--gold-light);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+#diagnostics .tag {
+  font-family: Silkscreen, monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  margin-right: 8px;
+}
+
+/* ── panes ──────────────────────────────────────────────────────────── */
+main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+}
+
+.pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pane);
+  backdrop-filter: blur(3px);
+  border: 2px solid var(--line);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: flex-basis 0.5s var(--ease-pane), border-color 0.3s;
+  cursor: pointer;
+}
+#schedulePane { flex: 1 1 64%; }
+#todoPane { flex: 1 1 36%; }
+body.todoFocus #schedulePane { flex-basis: 38%; }
+body.todoFocus #todoPane { flex-basis: 62%; }
+#schedulePane.focused { border-color: var(--edge-schedule); }
+#todoPane.focused { border-color: var(--edge-todo); }
+
+.paneHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 16px 12px;
+  border-bottom: 2px solid var(--line);
+  background: var(--subbar);
+}
+.mark { width: 8px; height: 8px; flex: none; }
+.mark.cyan { background: var(--cyan); }
+.mark.sand { background: var(--sand); }
+.mark.gold { background: var(--gold); }
+.paneName {
+  font-family: Silkscreen, monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+.count { font-size: 12px; color: var(--dim); margin-left: auto; }
+
+/* ── week grid ──────────────────────────────────────────────────────── */
+.dayHeads {
+  flex: none;
+  /* Grid, not flex: the header and the grid below are separate containers, and
+     two flex layouts distribute fractional widths differently — they drifted
+     ~2px apart. The same grid template in both is identical by construction. */
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, 1fr);
+  transition: grid-template-columns 0.32s var(--ease-row);
+  padding-left: 12px;
+  /* Right padding is set from the measured scrollbar width so the headers stay
+     over their columns; the leading spacer matches the hour gutter. */
+  padding-right: 12px;
+  border-bottom: 2px solid var(--line);
+  background: var(--subbar);
+}
+.headGutter { /* occupies the template's first track */ }
+
+.filterBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 16px;
+  background: #0f3a5e;
+  border-bottom: 2px solid var(--line);
+}
+.filterBar.peek { background: rgba(20, 32, 45, .9); }
+.filterBar span {
+  font-family: Silkscreen, monospace;
+  font-size: 10px;
+  letter-spacing: .1em;
+  color: var(--on-blue);
+}
+.filterBar.peek span { color: #8fbcd6; }
+.btn.tiny {
+  font-size: 9px;
+  padding: 5px 9px;
+  border-width: 2px;
+  border-color: #2f6c96;
+  background: transparent;
+  color: var(--on-blue);
+}
+.dayHead {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 2px 8px;
+  /* Reset first: a button's default border on the other sides adds width and
+     walks the headers out of line with their columns. */
+  border: none;
+  border-left: 1px solid transparent;
+  border-bottom: 3px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+.dayHead .wd {
+  font-family: Silkscreen, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.dayHead .dn { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.dayHead.weekend .wd { color: var(--dimmer); }
+.dayHead.weekend .dn { color: var(--dim); }
+.dayHead.peek { background: rgba(207, 234, 246, .06); }
+.dayHead.peek .wd { color: #dff0fa; }
+.dayHead.peek .dn { color: #f2f8fc; }
+.dayHead.today { background: rgba(245, 185, 66, 0.055); }
+.dayHead.today .wd { color: var(--gold); }
+.dayHead.today .dn { color: var(--gold-light); }
+.dayHead.sel { background: #0f3a5e; border-bottom-color: var(--cyan); }
+.dayHead.sel .wd { color: var(--on-blue); }
+.dayHead.sel .dn { color: var(--text); }
+
+.grid { flex: 1; min-height: 0; overflow: auto; padding: 0 12px 16px; }
+.gridInner {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, 1fr);
+  transition: grid-template-columns 0.32s var(--ease-row);
+}
+.hours { min-width: 0; }
+.hourCell {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--dimmer);
+  text-align: right;
+  padding-right: 9px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  transition: height 0.34s var(--ease-row), font-size 0.34s, color 0.34s;
+}
+.hourCell.collapsed { font-size: 9px; color: #39404f; }
+
+.dayCol {
+  min-width: 0;
+  position: relative;
+  border-left: 1px solid var(--line-col);
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.3s;
+}
+.dayCol.today { background: rgba(245, 185, 66, 0.055); }
+.dayCol.peek { background: rgba(207, 234, 246, .045); }
+.spacer { border-bottom: 1px solid var(--line-hour); transition: height 0.34s var(--ease-row); }
+
+.ev {
+  position: absolute;
+  left: 2px;
+  width: calc(100% - 5px);
+  padding: 5px 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1;
+  border-left: 4px solid var(--cyan);
+  background: rgba(127, 208, 236, 0.13);
+  cursor: pointer;
+  transition: width 0.24s var(--ease-row), box-shadow 0.24s, background-color 0.24s;
+}
+.ev:hover {
+  z-index: 30;
+  box-shadow: 0 0 0 1px rgba(245, 185, 66, 0.45), 0 0 16px rgba(245, 185, 66, 0.3);
+}
+.ev .t {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ev .h {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.ev.done .t { color: var(--dimmer); text-decoration: line-through; }
+.ev .zone {
+  font-family: Silkscreen, monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  padding: 1px 3px;
+  background: rgba(12, 19, 34, 0.75);
+  border: 1px solid currentColor;
+}
+.ev .rep { font-family: Silkscreen, monospace; font-size: 8px; opacity: 0.75; }
+
+/* ── to-do ──────────────────────────────────────────────────────────── */
+.buckets { flex: 1; min-height: 0; overflow: auto; padding: 6px 14px 8px; }
+.bucket { display: flex; flex-direction: column; gap: 1px; padding-top: 14px; }
+.bucketHead { display: flex; align-items: center; gap: 9px; padding: 0 2px 8px; }
+.bucketHead .lbl {
+  font-family: Silkscreen, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+.bucketHead .rule { flex: 1; height: 2px; background: var(--line); }
+.bucketHead .n { font-size: 11px; color: var(--dimmer); }
+.bucket.today .lbl { color: var(--sand); }
+.bucket.week .lbl { color: var(--cyan); }
+.bucket.someday .lbl { color: #8b95ab; }
+
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 8px;
+  background: var(--row);
+  border-left: 3px solid var(--dimmer);
+}
+.task:hover { background: var(--row-hover); }
+.task.done { background: var(--row-done); border-left-color: #2a3140; }
+.task .box {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  border: 2px solid var(--line-box);
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.task .box i { width: 6px; height: 6px; display: block; background: transparent; }
+.task.done .box i { background: #0c0e12; }
+.task .txt {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  text-wrap: pretty;
+}
+.task.done .txt { color: var(--dimmer); text-decoration: line-through; }
+.task .chips { display: flex; gap: 5px; flex: none; align-items: center; }
+.tagChip {
+  font-family: Silkscreen, monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 3px 5px;
+  background: #10141c;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.play {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 8px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.play:hover { border-color: var(--gold); color: var(--gold); }
+.empty { font-size: 12px; color: var(--faint); padding: 10px 11px; }
+
+.addRow { flex: none; padding: 8px 14px 10px; }
+.addRow input {
+  width: 100%;
+  padding: 9px 11px;
+  background: transparent;
+  border: 2px dashed var(--line-dash);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  outline: none;
+}
+.addRow input::placeholder { color: var(--faint); }
+.addRow input:focus { border-color: var(--line-box); border-style: solid; }
+
+.footHint {
+  flex: none;
+  padding: 10px 16px;
+  border-top: 2px solid var(--line);
+  background: var(--subbar);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+}
+
+/* ── running timer ──────────────────────────────────────────────────── */
+.timerBar {
+  position: relative;
+  z-index: 40;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  background: rgba(20, 17, 8, 0.95);
+  border: 2px solid var(--edge-todo);
+}
+.timerBar .mark { animation: pulse 1.6s steps(2, end) infinite; }
+@keyframes pulse { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.25; } }
+.tTitle { flex: 1; min-width: 0; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tElapsed { font-family: Silkscreen, monospace; font-size: 14px; color: var(--gold-light); letter-spacing: 0.04em; }
+.tEst { font-size: 11px; color: var(--dim); }
+.tEst.over { color: var(--coral); }
+.btn.stop { padding: 6px 10px; font-size: 9px; border-color: var(--gold); color: var(--gold-light); }
+
+/* ── help ───────────────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(6, 9, 15, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.sheet {
+  width: 640px;
+  max-width: 100%;
+  max-height: 80vh;
+  overflow: auto;
+  background: rgba(12, 16, 24, 0.99);
+  border: 2px solid var(--edge-schedule);
+  box-shadow: 0 12px 0 rgba(6, 10, 18, 0.5);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  padding: 20px;
+}
+.sheetHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.eyebrow { font-family: Silkscreen, monospace; font-size: 9px; letter-spacing: 0.14em; color: var(--gold); }
+.sheet pre {
+  margin: 0;
+  font-family: Inconsolata, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+  white-space: pre-wrap;
+}
+
+/* ── item detail sheet ──────────────────────────────────────────────── */
+.detailBody { display: flex; flex-direction: column; gap: 14px; }
+.detailTitle {
+  font-family: Inconsolata, monospace;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--text);
+  margin: 2px 0 0;
+}
+.detailWhen { font-size: 11.5px; letter-spacing: .03em; color: #8b95ab; }
+.detailError {
+  font-size: 12px;
+  color: var(--coral);
+  border: 1px solid var(--coral);
+  padding: 7px 9px;
+  background: rgba(255, 138, 118, .08);
+}
+
+.field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fieldStacked { display: flex; flex-direction: column; gap: 8px; }
+.fieldLabel {
+  font-family: Silkscreen, monospace;
+  font-size: 8.5px;
+  letter-spacing: .12em;
+  color: var(--dimmer);
+  white-space: nowrap;
+}
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.hint { font-size: 11.5px; color: var(--faint); letter-spacing: .02em; }
+
+.sheet button {
+  font-family: Silkscreen, monospace;
+  font-size: 9px;
+  letter-spacing: .1em;
+  padding: 8px 11px;
+  background: transparent;
+  border: 1px solid var(--line-box);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.sheet button:hover { border-color: var(--cyan); color: var(--text); }
+.sheet button.wide { width: 100%; padding: 10px; }
+.sheet button.danger { border-color: #5a3630; color: var(--coral); }
+.sheet button.danger:hover { border-color: var(--coral); }
+.sheet button.on {
+  background: rgba(245, 185, 66, .16);
+  border-color: var(--gold);
+  color: var(--gold-light);
+}
+.sheet button.toggle { min-width: 58px; }
+
+.chipRow { display: flex; flex-wrap: wrap; gap: 5px; }
+.zchip, .xchip { font-size: 8.5px !important; padding: 6px 8px !important; }
+.dayRow { display: flex; gap: 4px; }
+.dchip { flex: 1; padding: 8px 0 !important; }
+.stepper, .timeEdit { display: flex; align-items: center; gap: 6px; }
+.sbtn { padding: 6px 9px !important; }
+.sval {
+  font-family: Inconsolata, monospace;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 88px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── drag to schedule ───────────────────────────────────────────────── */
+.dragGhost {
+  position: fixed;
+  z-index: 90;
+  transform: translate(12px, -50%);
+  pointer-events: none;
+  padding: 8px 11px;
+  background: var(--row);
+  border: 2px solid var(--cyan);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, .5);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.dayCol.dropTarget { background: rgba(127, 208, 236, .12); outline: 1px dashed var(--cyan); }
+
+/* What the parser made of the last line you typed. Shown briefly, so a line
+   that was saved as plain text does not just vanish into Someday. */
+.addEcho {
+  flex: none;
+  padding: 7px 16px 9px;
+  font-size: 11.5px;
+  letter-spacing: .02em;
+  color: var(--cyan);
+  border-top: 1px solid var(--line);
+  animation: echoIn .18s var(--ease-row);
+}
+.addEcho.plain { color: var(--gold-light); }
+.addEcho b { font-weight: 600; color: var(--text); }
+@keyframes echoIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .addEcho { animation: none; } }
+
+/* ── week picker ────────────────────────────────────────────────────── */
+.nav { position: relative; }
+.weekPicker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 250px;
+  max-height: 330px;
+  overflow: auto;
+  background: rgba(12, 16, 24, .97);
+  border: 2px solid var(--edge-schedule);
+  box-shadow: 0 10px 0 rgba(6, 10, 18, .45);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pickHead {
+  font-family: Silkscreen, monospace;
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: var(--gold);
+  padding: 7px 8px 8px;
+}
+.pickRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.pickRow:hover { background: #1b2231; }
+.pickRow .range { font-size: 12.5px; color: var(--text-3); }
+.pickRow .rel {
+  font-family: Silkscreen, monospace;
+  font-size: 8.5px;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  color: var(--dimmer);
+}
+.pickRow.now { border-left-color: var(--gold); }
+.pickRow.now .rel { color: var(--gold); }
+.pickRow.sel { background: #16283a; border-left-color: var(--cyan); }
+.pickRow.sel .range { color: var(--text); }
+
+.ev .place {
+  font-size: 10px;
+  letter-spacing: .02em;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

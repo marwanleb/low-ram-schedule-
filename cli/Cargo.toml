@@ -1,0 +1,19 @@
+[package]
+name = "sched"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "sched"
+path = "src/main.rs"
+
+[dependencies]
+ms-core = { path = "../core" }
+clap.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+iana-time-zone.workspace = true

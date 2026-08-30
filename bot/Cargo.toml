@@ -1,0 +1,18 @@
+[package]
+name = "msbot"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "msbot"
+path = "src/main.rs"
+
+[dependencies]
+ms-core = { path = "../core" }
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+iana-time-zone.workspace = true

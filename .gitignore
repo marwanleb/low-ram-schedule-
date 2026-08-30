@@ -1,0 +1,15 @@
+# Build output — 11 GB, and none of it is source.
+target/
+
+# The store, and the WAL/shm files beside it.
+*.db
+*.db-wal
+*.db-shm
+
+# The Telegram token. It lives in %APPDATA% rather than here, but never let a
+# stray copy in.
+bot.toml
+.env
+
+# The design handoff is kept extracted, next to this; the archive is redundant.
+*.zip

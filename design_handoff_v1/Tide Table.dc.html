@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Inconsolata:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#0c0e12;height:100%}
+*{box-sizing:border-box}
+a{color:#7fd0ec;text-decoration:none}
+a:hover{color:#bfe9f7}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#0c0e12}
+::-webkit-scrollbar-thumb{background:#2a3140;border:2px solid #0c0e12}
+::-webkit-scrollbar-thumb:hover{background:#3d4759}
+input,button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="position:relative;height:100vh;display:flex;flex-direction:column;background:#0c0e12;color:#e9ecf1;font-family:'Inconsolata',ui-monospace,monospace;padding:18px 20px 20px;gap:14px;overflow:hidden">
+  <dc-import name="Sky" waterline="{{ 0.78 }}" hint-size="100%,100%" style="position:absolute;inset:0;z-index:0"></dc-import>
+
+  <header style="position:relative;z-index:60;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex:none">
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-family:'Silkscreen',monospace;font-size:19px;letter-spacing:.02em;color:#F5B942;text-shadow:0 2px 0 rgba(8,14,26,.55)">{{ weekTitle }}</div>
+    </div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px">
+      <button onclick="{{ prevWeek }}" style="font-family:'Silkscreen',monospace;font-size:11px;padding:8px 12px;background:rgba(12,19,34,.72);border:2px solid rgba(207,234,246,.3);color:#e2f1fa;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)" style-hover="border-color:#7fd0ec;color:#e9ecf1">&#60;&#60;</button>
+      <button onclick="{{ togglePicker }}" style="font-family:'Silkscreen',monospace;font-size:11px;letter-spacing:.1em;padding:8px 14px;background:{{ pickerBg }};border:2px solid {{ pickerBorder }};color:#e2f1fa;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)" style-hover="border-color:#7fd0ec;color:#e9ecf1">TODAY  &#9662;</button>
+      <button onclick="{{ nextWeek }}" style="font-family:'Silkscreen',monospace;font-size:11px;padding:8px 12px;background:rgba(12,19,34,.72);border:2px solid rgba(207,234,246,.3);color:#e2f1fa;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)" style-hover="border-color:#7fd0ec;color:#e9ecf1">&#62;&#62;</button>
+      <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:250px;max-height:330px;overflow:auto;background:rgba(12,16,24,.97);border:2px solid #2f4a5e;box-shadow:0 10px 0 rgba(6,10,18,.45);padding:6px;display:flex;flex-direction:column;gap:1px">
+          <div style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.14em;color:#F5B942;padding:7px 8px 8px">JUMP TO WEEK</div>
+          <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="10">
+            <button onclick="{{ w.onPick }}" style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:7px 9px;background:{{ w.bg }};border:none;border-left:3px solid {{ w.edge }};cursor:pointer" style-hover="background:#1b2231">
+              <span style="font-size:12.5px;letter-spacing:.02em;color:{{ w.color }}">{{ w.range }}</span>
+              <span style="font-family:'Silkscreen',monospace;font-size:8.5px;letter-spacing:.08em;color:{{ w.relColor }};white-space:nowrap">{{ w.rel }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </header>
+
+  <main style="position:relative;z-index:1;flex:1;min-height:0;display:flex;gap:14px">
+
+    <!-- PANE 1 · SCHEDULE -->
+    <section onclick="{{ focusSchedule }}" style="flex:1 1 {{ schedW }};min-width:0;display:flex;flex-direction:column;background:rgba(16,20,27,.9);backdrop-filter:blur(3px);border:2px solid {{ schedBorder }};clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);transition:flex-basis .5s cubic-bezier(.45,0,.2,1),border-color .3s;cursor:pointer">
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 12px;border-bottom:2px solid #1f2530">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:8px;height:8px;background:#7fd0ec;flex:none"></span>
+          <span style="font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.12em;color:#e9ecf1">SCHEDULE</span>
+          <span style="font-size:12px;letter-spacing:.06em;color:#6b7280">{{ eventCount }}</span>
+        </div>
+      </div>
+
+      <div style="flex:none;display:flex;padding-left:12px;padding-right:{{ headPad }};border-bottom:2px solid #1f2530;background:rgba(10,13,20,.72)">
+        <div style="width:{{ gutter }}px;flex:none"></div>
+        <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+          <button onclick="{{ d.onClick }}" onmouseenter="{{ d.onEnter }}" onmouseleave="{{ d.onLeave }}" style="flex:{{ d.flex }};min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;background:{{ d.headBg }};border:none;border-left:1px solid transparent;border-bottom:3px solid {{ d.underline }};cursor:pointer;transition:flex-grow .32s cubic-bezier(.4,0,.2,1),background-color .3s ease">
+            <span style="font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.08em;color:{{ d.labelColor }}">{{ d.label }}</span>
+            <span style="font-size:13px;font-weight:600;color:{{ d.dateColor }}">{{ d.date }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div ref="{{ gridRef }}" style="flex:1;min-height:0;overflow:auto;padding:0 12px 16px">
+        <div style="display:flex">
+          <div style="width:{{ gutter }}px;flex:none;display:flex;flex-direction:column">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="13">
+              <div style="height:{{ r.h }};flex:none;font-size:{{ r.labelSize }};line-height:1;letter-spacing:.04em;color:{{ r.labelColor }};text-align:right;padding-right:9px;transition:height .34s cubic-bezier(.4,0,.2,1),font-size .34s ease,color .34s ease">{{ r.label }}</div>
+            </sc-for>
+          </div>
+          <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+            <div onmouseenter="{{ d.onEnter }}" onmouseleave="{{ d.onLeave }}" style="flex:{{ d.flex }};min-width:0;position:relative;height:{{ gridH }};border-left:1px solid {{ d.colEdge }};background:{{ d.colBg }};display:flex;flex-direction:column;transition:height .34s cubic-bezier(.4,0,.2,1),flex-grow .32s cubic-bezier(.4,0,.2,1),background-color .3s ease">
+              <sc-for list="{{ d.rows }}" as="r" hint-placeholder-count="13">
+                <div style="height:{{ r.h }};flex:none;border-bottom:1px solid #1a1e27;transition:height .34s cubic-bezier(.4,0,.2,1)"></div>
+              </sc-for>
+              <sc-if value="{{ d.ghost }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:2px;right:2px;top:{{ d.ghostTop }};height:{{ d.ghostH }};border:2px dashed #7fd0ec;background:rgba(127,208,236,.1)"></div>
+              </sc-if>
+              <sc-for list="{{ d.events }}" as="ev" hint-placeholder-count="2">
+                <div onmouseenter="{{ ev.onEnter }}" onmouseleave="{{ ev.onLeave }}" style="position:absolute;left:2px;width:{{ ev.w }};top:{{ ev.top }};height:{{ ev.h }};background:{{ ev.bg }};border-left:4px solid {{ ev.bar }};padding:5px 6px;overflow:hidden;display:flex;flex-direction:column;gap:2px;z-index:{{ ev.z }};box-shadow:{{ ev.shadow }};transition:width .24s cubic-bezier(.4,0,.2,1),box-shadow .24s ease,background-color .24s ease,top .34s cubic-bezier(.4,0,.2,1),height .34s cubic-bezier(.4,0,.2,1)">
+                  <span style="flex:1;min-height:0;font-size:12px;font-weight:600;line-height:1.2;letter-spacing:.02em;color:#e9ecf1;overflow:hidden;text-overflow:{{ ev.clip }};white-space:nowrap">{{ ev.title }}</span>
+                  <span style="flex:none;font-size:10.5px;letter-spacing:.04em;color:{{ ev.bar }};white-space:nowrap">{{ ev.time }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANE 2 · TO DO -->
+    <section onclick="{{ focusTodos }}" style="flex:1 1 {{ todoW }};min-width:0;display:flex;flex-direction:column;background:rgba(16,20,27,.9);backdrop-filter:blur(3px);border:2px solid {{ todoBorder }};clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);transition:flex-basis .5s cubic-bezier(.45,0,.2,1),border-color .3s;cursor:pointer">
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 12px;border-bottom:2px solid #1f2530">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:8px;height:8px;background:#FFCF95;flex:none"></span>
+          <span style="font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.12em;color:#e9ecf1">TO DO</span>
+          <span style="font-size:12px;letter-spacing:.06em;color:#6b7280">{{ openCount }}</span>
+        </div>
+      </div>
+
+      <sc-if value="{{ filtered }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 16px;background:#0f3a5e;border-bottom:2px solid #1f2530">
+          <span style="font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.1em;color:#bfe9f7">{{ filterLabel }}</span>
+          <button onclick="{{ clearFilter }}" style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.1em;padding:5px 9px;background:transparent;border:2px solid #2f6c96;color:#bfe9f7;cursor:pointer">CLEAR</button>
+        </div>
+      </sc-if>
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:6px 14px 18px">
+        <sc-for list="{{ buckets }}" as="b" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:1px;padding-top:14px">
+            <div style="display:flex;align-items:center;gap:9px;padding:0 2px 8px">
+              <span style="font-family:'Silkscreen',monospace;font-size:10px;letter-spacing:.12em;color:{{ b.color }}">{{ b.label }}</span>
+              <span style="flex:1;height:2px;background:#1f2530"></span>
+              <span style="font-size:11px;color:#59637a">{{ b.count }}</span>
+            </div>
+            <sc-for list="{{ b.items }}" as="t" hint-placeholder-count="3">
+              <div onpointerdown="{{ t.onDown }}" style="display:flex;align-items:flex-start;gap:11px;padding:9px 8px;background:{{ t.bg }};border-left:3px solid {{ t.edge }};cursor:grab;touch-action:none" style-hover="background:#1b2029">
+                <button onclick="{{ t.onToggle }}" style="flex:none;width:16px;height:16px;margin-top:1px;background:{{ t.boxBg }};border:2px solid {{ t.boxBorder }};padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
+                  <span style="width:6px;height:6px;background:{{ t.tick }}"></span>
+                </button>
+                <span style="flex:1;min-width:0;font-size:13.5px;line-height:1.35;letter-spacing:.01em;color:{{ t.textColor }};text-decoration:{{ t.strike }};text-wrap:pretty">{{ t.text }}</span>
+                <sc-if value="{{ t.hasTag }}" hint-placeholder-val="{{ false }}">
+                  <span style="flex:none;font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:.06em;padding:3px 5px;margin-top:1px;background:#10141c;border:1px solid {{ t.edge }};color:{{ t.edge }}">{{ t.tag }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ b.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:10px 11px;font-size:12px;letter-spacing:.03em;color:#4d5669">nothing here</div>
+            </sc-if>
+            <button style="margin-top:4px;text-align:left;padding:8px 11px;background:transparent;border:2px dashed #232936;color:#4d5669;font-size:12px;letter-spacing:.06em;cursor:pointer" style-hover="border-color:#39404f;color:#8b95ab">+ add task</button>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="flex:none;padding:10px 16px;border-top:2px solid #1f2530;background:rgba(10,13,20,.72);font-size:11px;letter-spacing:.05em;color:#4d5669">drag a task onto the schedule to block time for it</div>
+    </section>
+  </main>
+
+  <sc-if value="{{ dragging }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:{{ dragX }};top:{{ dragY }};transform:translate(12px,-50%);pointer-events:none;z-index:50;display:flex;align-items:center;gap:9px;padding:8px 11px;background:#171b22;border:2px solid {{ dragEdge }};box-shadow:4px 4px 0 rgba(0,0,0,.5)">
+      <span style="width:8px;height:8px;background:{{ dragEdge }}"></span>
+      <span style="font-size:13px;color:#e9ecf1;white-space:nowrap">{{ dragText }}</span>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startHour&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:8,&quot;min&quot;:0,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Schedule&quot;},&quot;endHour&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:21,&quot;min&quot;:13,&quot;max&quot;:24,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Schedule&quot;}}">
+const HH = 46;
+const CAT = { work:'#7fd0ec', life:'#FFCF95', body:'#a8d98f', social:'#ff8a76' };
+const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+function blend(hex, a, base) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 'rgb(' + ch.map((c, i) => Math.round(c * a + base[i] * (1 - a))).join(',') + ')';
+}
+function fmtH(h) {
+  const s = h % 12 === 0 ? 12 : h % 12;
+  return s + (h < 12 ? ' AM' : ' PM');
+}
+function fmtRange(s, d) {
+  const e = s + d;
+  const p = h => (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? 'a' : 'p');
+  return p(s) + '–' + p(e);
+}
+
+class Component extends DCLogic {
+  state = {
+    active: 'schedule',
+    sel: null,
+    week: 0,
+    drag: null,
+    hover: null,
+    hoverEv: null,
+    hoverDay: null,
+    picker: false,
+    sbw: 0,
+    events: [
+      { id:'e1', day:0, start:9,  dur:1, title:'STANDUP', cat:'work' },
+      { id:'e2', day:0, start:10, dur:2, title:'DEEP WORK · Q3 MODEL', cat:'work' },
+      { id:'e3', day:0, start:18, dur:1, title:'SWIM PRACTICE', cat:'body' },
+      { id:'e4', day:1, start:9,  dur:1, title:'STANDUP', cat:'work' },
+      { id:'e5', day:1, start:13, dur:1, title:'1:1 W/ MAYA', cat:'work' },
+      { id:'e6', day:1, start:17, dur:2, title:'DINNER W/ SAM', cat:'social' },
+      { id:'e7', day:2, start:8,  dur:1, title:'GYM', cat:'body' },
+      { id:'e8', day:2, start:9,  dur:1, title:'STANDUP', cat:'work' },
+      { id:'e9', day:2, start:14, dur:1, title:'DENTIST', cat:'life' },
+      { id:'e10', day:3, start:9, dur:1, title:'STANDUP', cat:'work' },
+      { id:'e11', day:3, start:11, dur:3, title:'DESIGN REVIEW BLOCK', cat:'work' },
+      { id:'e12', day:4, start:9, dur:1, title:'STANDUP', cat:'work' },
+      { id:'e13', day:4, start:16, dur:1, title:'GROCERIES', cat:'life' },
+      { id:'e14', day:5, start:10, dur:2, title:'FARMERS MARKET', cat:'life' },
+      { id:'e15', day:5, start:19, dur:2, title:'GAME NIGHT', cat:'social' },
+      { id:'e16', day:6, start:9, dur:2, title:'LONG RUN', cat:'body' },
+      { id:'e17', day:6, start:15, dur:1, title:'LAUNDRY + PREP', cat:'life' }
+    ],
+    tasks: [
+      { id:'t1', b:'today', text:'Reply to the landlord about the lease', cat:'life', day:0, done:false },
+      { id:'t2', b:'today', text:'Pick up prescription', cat:'life', day:2, done:false },
+      { id:'t3', b:'today', text:'Send Maya the Q3 numbers', cat:'work', day:1, done:true },
+      { id:'t4', b:'week', text:'Book October flights', cat:'life', day:null, done:false },
+      { id:'t5', b:'week', text:'Draft the newsletter intro', cat:'work', day:3, done:false },
+      { id:'t6', b:'week', text:'Patch the bike tire', cat:'body', day:5, done:false },
+      { id:'t7', b:'week', text:'Return the blue jacket', cat:'life', day:4, done:false },
+      { id:'t8', b:'someday', text:'Learn to free dive', cat:'body', day:null, done:false },
+      { id:'t9', b:'someday', text:'Repaint the back deck', cat:'life', day:null, done:false }
+    ]
+  };
+
+  gridRef = el => {
+    this.grid = el;
+    if (el) this.measure();
+  };
+
+  titleW(text) {
+    if (!this._ctx) this._ctx = document.createElement('canvas').getContext('2d');
+    this._ctx.font = "600 12px 'Inconsolata', monospace";
+    return Math.ceil(this._ctx.measureText(text).width) + 28;
+  }
+
+  componentDidMount() {
+    this.measure();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.forceUpdate());
+    this._onResize = () => this.measure();
+    window.addEventListener('resize', this._onResize);
+  }
+
+  componentWillUnmount() { window.removeEventListener('resize', this._onResize); }
+
+  measure() {
+    const el = this.grid;
+    if (!el) return;
+    const sb = el.offsetWidth - el.clientWidth;
+    if (sb !== this.state.sbw) this.setState({ sbw: sb });
+  }
+
+  cellAt(x, y) {
+    const el = this.grid;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (y < r.top || y > r.bottom) return null;
+    const row = el.firstElementChild;
+    if (!row) return null;
+    const cols = Array.prototype.slice.call(row.children, 1);
+    let day = -1;
+    cols.forEach((c, i) => {
+      const cr = c.getBoundingClientRect();
+      if (x >= cr.left && x <= cr.right) day = i;
+    });
+    if (day < 0) return null;
+    const relY = y - r.top + el.scrollTop;
+    const rows = this._rows || [];
+    let hour = -1;
+    rows.forEach((rw, i) => {
+      if (relY >= rw.t && relY < rw.t + rw.hp) hour = this.startHour() + i;
+    });
+    if (hour < 0) return null;
+    return { day: day, hour: hour };
+  }
+
+  startHour() { return this.props.startHour ?? 8; }
+  endHour() { return this.props.endHour ?? 21; }
+  gutter() { return 52; }
+
+  onTaskDown = task => e => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    const move = ev => this.setState({
+      drag: { id:task.id, text:task.text, cat:task.cat, x:ev.clientX, y:ev.clientY },
+      hover: this.cellAt(ev.clientX, ev.clientY)
+    });
+    const up = ev => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const cell = this.cellAt(ev.clientX, ev.clientY);
+      if (cell && this.state.drag) {
+        this.setState(s => ({
+          events: s.events.concat([{ id:'n'+Date.now(), day:cell.day, start:cell.hour, dur:1, title:task.text.toUpperCase(), cat:task.cat }]),
+          tasks: s.tasks.map(t => t.id === task.id ? Object.assign({}, t, { day:cell.day }) : t),
+          drag: null, hover: null
+        }));
+      } else {
+        this.setState({ drag:null, hover:null });
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  toggle = id => e => {
+    e.stopPropagation();
+    this.setState(s => ({ tasks: s.tasks.map(t => t.id === id ? Object.assign({}, t, { done: !t.done }) : t) }));
+  };
+
+  pickDay = i => e => {
+    e.stopPropagation();
+    this.setState(s => ({ active:'todos', sel: s.sel === i ? null : i }));
+  };
+
+  monday() {
+    const d = new Date(2026, 7, 24);
+    d.setDate(d.getDate() + this.state.week * 7);
+    return d;
+  }
+
+  renderVals() {
+    const s = this.state, sh = this.startHour(), eh = this.endHour();
+    const active = s.active, mon = this.monday();
+    const SLIM = 17;
+    const rows = [];
+    let off = 0;
+    for (let h = sh; h < eh; h++) {
+      const busy = s.events.some(e => e.start <= h && h < e.start + e.dur);
+      const hp = busy ? HH : SLIM;
+      rows.push({
+        t: off, hp: hp, h: hp + 'px', busy: busy,
+        label: busy ? fmtH(h) : fmtH(h).replace(' AM', 'a').replace(' PM', 'p'),
+        labelSize: busy ? '11px' : '9px',
+        labelColor: busy ? '#59637a' : '#39404f'
+      });
+      off += hp;
+    }
+    this._rows = rows;
+    const rowTop = i => (i < rows.length ? rows[i].t : off);
+
+    const days = DAYS.map((label, i) => {
+      const d = new Date(mon); d.setDate(d.getDate() + i);
+      const isSel = s.sel === i;
+      const isWknd = i > 4;
+      const today = new Date();
+      const isToday = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+      const GOLD = '#F5B942', GOLD_LT = '#FFD98A';
+      const isHot = s.hoverDay === i;
+      const wide = s.hoverDay !== null ? isHot : isToday;
+      return {
+        label: label, date: String(d.getDate()), onClick: this.pickDay(i),
+        headBg: isSel ? '#0f3a5e' : (isToday ? 'rgba(245,185,66,.055)' : (isHot ? 'rgba(207,234,246,.06)' : 'transparent')),
+        onEnter: () => {
+          clearTimeout(this._dayTimer);
+          this._dayTimer = setTimeout(() => this.setState({ hoverDay: i }), 1000);
+        },
+        onLeave: () => {
+          clearTimeout(this._dayTimer);
+          this.setState(st => (st.hoverDay === i ? { hoverDay: null } : null));
+        },
+        underline: isSel ? '#7fd0ec' : 'transparent',
+        labelColor: isSel ? '#bfe9f7' : (isToday ? GOLD : (isHot ? '#dff0fa' : (isWknd ? '#59637a' : '#98a0ad'))),
+        dateColor: isSel ? '#e9ecf1' : (isToday ? GOLD_LT : (isHot ? '#f2f8fc' : (isWknd ? '#6b7280' : '#c6ccd6'))),
+        flex: wide ? 1.5 : 1,
+        colBg: isToday ? 'rgba(245,185,66,.055)' : (isHot ? 'rgba(207,234,246,.045)' : 'transparent'),
+        colEdge: '#1c2029',
+        ghost: !!(s.hover && s.hover.day === i),
+        ghostTop: s.hover && s.hover.day === i ? (rowTop(s.hover.hour - sh) + 1) + 'px' : '0px',
+        ghostH: s.hover && s.hover.day === i ? (rowTop(s.hover.hour - sh + 1) - rowTop(s.hover.hour - sh) - 3) + 'px' : '0px',
+        rows: rows,
+        events: s.events.filter(e => e.day === i).map(e => {
+          const c = CAT[e.cat] || CAT.work;
+          const hot = s.hoverEv === e.id;
+          const need = this.titleW(e.title);
+          return {
+            title: e.title, time: fmtRange(e.start, e.dur), bar: c,
+            bg: hot ? blend(c, .13, [20, 23, 29]) : rgba(c, .13),
+            top: (rowTop(e.start - sh) + 1) + 'px',
+            h: (rowTop(e.start - sh + e.dur) - rowTop(e.start - sh) - 4) + 'px',
+            w: hot ? 'max(calc(100% - 5px),' + need + 'px)' : 'calc(100% - 5px)',
+            z: hot ? 30 : 1,
+            shadow: hot ? '0 0 0 1px rgba(245,185,66,.45),0 0 16px rgba(245,185,66,.3)' : 'none',
+            clip: hot ? 'clip' : 'ellipsis',
+            onEnter: () => this.setState({ hoverEv: e.id }),
+            onLeave: () => this.setState(st => (st.hoverEv === e.id ? { hoverEv: null } : null))
+          };
+        })
+      };
+    });
+
+    const defs = [
+      { id:'today', label:'TODAY', color:'#FFCF95' },
+      { id:'week', label:'THIS WEEK', color:'#7fd0ec' },
+      { id:'someday', label:'SOMEDAY', color:'#8b95ab' }
+    ];
+    const buckets = defs.map(def => {
+      let items = s.tasks.filter(t => t.b === def.id);
+      if (s.sel !== null) items = items.filter(t => t.day === s.sel);
+      return {
+        label: def.label, color: def.color,
+        count: items.filter(t => !t.done).length + ' open',
+        empty: items.length === 0,
+        items: items.map(t => {
+          const c = CAT[t.cat] || CAT.work;
+          return {
+            text: t.text, onToggle: this.toggle(t.id), onDown: this.onTaskDown(t),
+            bg: t.done ? '#12151b' : '#171b22', edge: t.done ? '#2a3140' : c,
+            boxBg: t.done ? c : 'transparent', boxBorder: t.done ? c : '#39404f',
+            tick: t.done ? '#0c0e12' : 'transparent',
+            textColor: t.done ? '#59637a' : '#e9ecf1',
+            strike: t.done ? 'line-through' : 'none',
+            hasTag: t.day !== null, tag: t.day !== null ? DAYS[t.day] : ''
+          };
+        })
+      };
+    });
+
+    const open = s.tasks.filter(t => !t.done).length;
+    return {
+      weekTitle: 'WEEK OF ' + MON[mon.getMonth()] + ' ' + mon.getDate(),
+      prevWeek: () => this.setState(st => ({ week: st.week - 1 })),
+      togglePicker: e => { e.stopPropagation(); this.setState(st => ({ picker: !st.picker })); },
+      pickerOpen: s.picker,
+      pickerBg: s.picker ? 'rgba(20,44,64,.95)' : 'rgba(12,19,34,.72)',
+      pickerBorder: s.picker ? '#7fd0ec' : 'rgba(207,234,246,.3)',
+      weeks: Array.from({ length: 33 }, (_, k) => k - 4).map(off => {
+        const a = new Date(2026, 7, 24); a.setDate(a.getDate() + off * 7);
+        const b = new Date(a); b.setDate(b.getDate() + 6);
+        const cur = off === s.week;
+        return {
+          range: MON[a.getMonth()] + ' ' + a.getDate() + ' – ' + MON[b.getMonth()] + ' ' + b.getDate(),
+          rel: off === 0 ? 'THIS WEEK' : (off === 1 ? 'NEXT WEEK' : (off === -1 ? 'LAST WEEK' : (off > 0 ? '+' + off + ' WKS' : off + ' WKS'))),
+          bg: cur ? '#16283a' : 'transparent',
+          edge: cur ? '#7fd0ec' : (off === 0 ? '#F5B942' : 'transparent'),
+          color: cur ? '#e9ecf1' : '#aab3c6',
+          relColor: off === 0 ? '#F5B942' : '#59637a',
+          onPick: e => { e.stopPropagation(); this.setState({ week: off, picker: false }); }
+        };
+      }),
+      nextWeek: () => this.setState(st => ({ week: st.week + 1 })),
+      thisWeek: () => this.setState({ week: 0 }),
+      focusSchedule: () => this.setState({ active:'schedule', picker:false }),
+      focusTodos: () => this.setState({ active:'todos', picker:false }),
+      schedW: active === 'schedule' ? '64%' : '38%',
+      todoW: active === 'schedule' ? '36%' : '62%',
+      schedBorder: active === 'schedule' ? '#2f4a5e' : '#1f2530',
+      todoBorder: active === 'todos' ? '#4a4334' : '#1f2530',
+      schedHint: active === 'schedule' ? 'EXPANDED' : 'CLICK TO EXPAND',
+      todoHint: active === 'todos' ? 'EXPANDED' : 'CLICK TO EXPAND',
+      eventCount: s.events.length + ' blocks',
+      openCount: open + ' open',
+      rows: rows, days: days, buckets: buckets,
+      gridRef: this.gridRef, gutter: this.gutter(), gridH: off + 'px',
+      headPad: (12 + (s.sbw || 0)) + 'px',
+      filtered: s.sel !== null, filterLabel: s.sel !== null ? 'FILTERED · ' + DAYS[s.sel] : '',
+      clearFilter: e => { e.stopPropagation(); this.setState({ sel:null }); },
+      dragging: !!s.drag,
+      dragText: s.drag ? s.drag.text : '',
+      dragEdge: s.drag ? (CAT[s.drag.cat] || CAT.work) : CAT.work,
+      dragX: s.drag ? s.drag.x + 'px' : '0px',
+      dragY: s.drag ? s.drag.y + 'px' : '0px'
+    };
+  }
+}
+
+</script>
+</body>
+</html>
