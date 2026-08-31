@@ -22,6 +22,9 @@ pub struct Item {
     /// Ticked off at all: the one-off case, or any occurrence of a repeat.
     /// Kept as a field so no call site has to re-derive it and get it wrong.
     pub completed: bool,
+    /// When it was most recently ticked, so a finished item can age out of the
+    /// list rather than sitting there struck through for ever.
+    pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub source: String,
     pub external_id: Option<String>,
@@ -211,6 +214,7 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Item> {
         recurs: r.get::<_, i64>(11)? != 0,
         done_on: Vec::new(),
         completed: false,
+        completed_at: None,
     })
 }
 
@@ -245,6 +249,21 @@ fn ticked(db: &Db, item_id: &str) -> bool {
         > 0
 }
 
+/// The most recent tick, whichever occurrence it belonged to.
+fn ticked_at(db: &Db, item_id: &str) -> Option<DateTime<Utc>> {
+    let newest: String = db
+        .conn
+        .query_row(
+            "SELECT max(done_at) FROM completions WHERE item_id = ?1",
+            rusqlite::params![item_id],
+            |r| r.get(0),
+        )
+        .ok()?;
+    DateTime::parse_from_rfc3339(&newest)
+        .ok()
+        .map(|d| d.with_timezone(&Utc))
+}
+
 pub fn fetch(db: &Db, id: &str) -> Option<Item> {
     let mut item = db
         .conn
@@ -256,6 +275,7 @@ pub fn fetch(db: &Db, id: &str) -> Option<Item> {
         .ok()?;
     item.done_on = completions(db, &item.id);
     item.completed = ticked(db, &item.id);
+    item.completed_at = ticked_at(db, &item.id);
     Some(item)
 }
 
@@ -274,6 +294,7 @@ pub fn get_items(db: &Db, filter: &Filter) -> Vec<Item> {
         .map(|mut it| {
             it.done_on = completions(db, &it.id);
             it.completed = ticked(db, &it.id);
+            it.completed_at = ticked_at(db, &it.id);
             it
         })
         .filter(|it| filter.listed.is_none_or(|w| it.listed == w))

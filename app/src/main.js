@@ -10,6 +10,10 @@ const CAT_COLOR = {
   social: "#FF8A76",
 };
 const DAY_MS = 86400000;
+/** How long a ticked item stays on the list before it clears itself. Long
+ *  enough to see it happen and undo a mis-tap; short enough that the list does
+ *  not silt up with everything you have ever finished. */
+const KEEP_DONE_MS = 60 * 60 * 1000;
 const ROW_H = 46;
 const ROW_H_COLLAPSED = 17;
 
@@ -316,7 +320,14 @@ function renderTodos() {
   // A peeked day filters the list the same way a pinned one does; pinning just
   // makes it stick. Spec: "Day peek and pin".
   const focusDay = state.peekDay || state.pinDay;
-  let pool = state.items.filter((i) => i.listed);
+  // A finished item lingers for an hour, then clears. Repeating items are
+  // unaffected — their tick belongs to one occurrence and lapses on its own.
+  const now = Date.now();
+  let pool = state.items.filter((i) => {
+    if (!i.listed) return false;
+    if (!i.done || !i.completed_at) return true;
+    return now - new Date(i.completed_at).getTime() < KEEP_DONE_MS;
+  });
   if (focusDay) {
     pool = pool.filter((i) => i.due_at && iso(new Date(i.due_at)) === focusDay);
   }
@@ -468,6 +479,18 @@ function tickTimer() {
 }
 // The clock is rendered locally; nothing polls the backend for it.
 setInterval(tickTimer, 1000);
+
+// Ticked items clear on their own, so a window left open has to notice the
+// hour passing. Re-renders only when something has actually aged out.
+setInterval(() => {
+  if (!state.week) return;
+  const now = Date.now();
+  const stale = state.items.some(
+    (i) => i.listed && i.done && i.completed_at &&
+      now - new Date(i.completed_at).getTime() >= KEEP_DONE_MS
+  );
+  if (stale) render();
+}, 60_000);
 
 /* ── input ─────────────────────────────────────────────────────────── */
 $("addForm").onsubmit = async (e) => {

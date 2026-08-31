@@ -332,3 +332,32 @@ fn an_explicit_past_date_is_not_moved() {
         NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     );
 }
+
+/// A ticked item needs to linger a moment — long enough to see it happen and
+/// undo a mis-tap — and then go, or the list silts up with everything you have
+/// ever finished.
+#[test]
+fn a_completed_item_records_when_it_was_ticked() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text(&db, "renew parking", today(), now()).unwrap();
+    assert_eq!(item.completed_at, None);
+
+    set_done(&db, &item.id, true, None, now()).unwrap();
+    let done = ms_core::store::fetch(&db, &item.id).unwrap();
+    assert_eq!(done.completed_at, Some(now()), "so the UI can age it out");
+
+    set_done(&db, &item.id, false, None, now()).unwrap();
+    assert_eq!(ms_core::store::fetch(&db, &item.id).unwrap().completed_at, None);
+}
+
+#[test]
+fn a_repeating_item_reports_the_latest_tick() {
+    let db = Db::open_in_memory().unwrap();
+    let trash = add_from_text(&db, "trash every tue 20:00", today(), now()).unwrap();
+    let later = now() + chrono::Duration::days(7);
+
+    set_done(&db, &trash.id, true, Some(NaiveDate::from_ymd_opt(2026, 9, 1).unwrap()), now()).unwrap();
+    set_done(&db, &trash.id, true, Some(NaiveDate::from_ymd_opt(2026, 9, 8).unwrap()), later).unwrap();
+
+    assert_eq!(ms_core::store::fetch(&db, &trash.id).unwrap().completed_at, Some(later));
+}

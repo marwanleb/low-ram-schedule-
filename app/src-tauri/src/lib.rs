@@ -36,6 +36,7 @@ pub struct ItemDto {
     recurs: bool,
     done: bool,
     done_on: Vec<String>,
+    completed_at: Option<String>,
     source: String,
     external_id: Option<String>,
     /// Banked seconds across finished, non-discarded sessions.
@@ -69,6 +70,7 @@ fn to_dto(db: &Db, i: &ms_core::Item, on: Option<NaiveDate>) -> ItemDto {
         recurs: i.recurs,
         done,
         done_on: i.done_on.iter().map(|d| d.to_string()).collect(),
+        completed_at: i.completed_at.map(|d| d.to_rfc3339()),
         source: i.source.clone(),
         external_id: i.external_id.clone(),
         spent_sec,
