@@ -17,7 +17,7 @@ fn main() {
         let p = ms_core::parse(&line, today);
         let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
         println!(
-            r#"{{"input":"{}","title":"{}","consumed":{},"due":{},"at":{},"span":{},"byday":{},"repeats":{},"location":{},"estimate_min":{}}}"#,
+            r#"{{"input":"{}","title":"{}","consumed":{},"due":{},"at":{},"span":{},"byday":{},"repeats":{},"listed":{},"scheduled":{},"location":{},"estimate_min":{}}}"#,
             esc(&line),
             esc(&p.title),
             p.consumed.len(),
@@ -28,6 +28,8 @@ fn main() {
                 .unwrap_or("null".into()),
             p.byday.len(),
             p.repeats,
+            p.listed,
+            p.scheduled,
             p.location.map(|l| format!("\"{}\"", esc(&l))).unwrap_or("null".into()),
             p.estimate_min.map(|v| v.to_string()).unwrap_or("null".into()),
         );

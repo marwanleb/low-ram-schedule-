@@ -5,6 +5,9 @@ commitments without rewriting them, time work against your estimate, and be in
 your pocket.
 
 Design: [`docs/superpowers/specs/2026-08-29-marwans-schedule-design.md`](docs/superpowers/specs/2026-08-29-marwans-schedule-design.md)
+Parser contract: [`docs/parser-behaviour.md`](docs/parser-behaviour.md) — what it
+should and should not understand, every case verified against the code by
+`python tools/behaviour_check.py`
 Agent instructions: [`AGENT.md`](AGENT.md)
 
 ## Layout
