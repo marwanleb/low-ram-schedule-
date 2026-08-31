@@ -164,11 +164,22 @@ function renderWeek() {
   const hours = [];
   for (let h = 7; h <= 22; h++) hours.push(h);
 
-  // Collapse empty hours only when the day does not otherwise fit. Squeezing a
-  // schedule that already has room to breathe just makes it harder to read.
-  const available = $("grid").clientHeight - 16;
-  const needsCollapse = hours.length * ROW_H > available;
-  const heightOf = (h) => (needsCollapse && !used.has(h) ? ROW_H_COLLAPSED : ROW_H);
+  // Empty hours give up only as much height as it takes to fit the pane, and
+  // never below the floor. All-or-nothing collapsing squeezed a schedule that
+  // had room to spare; if the squeeze is not enough, the grid scrolls instead
+  // of crushing the day.
+  // The grid's allocated box, not clientHeight: this runs before the new rows
+  // are appended, so clientHeight would still be describing the old content.
+  // getBoundingClientRect is set by the flex layout and is stable either way.
+  const PAD_BOTTOM = 16;
+  const available = $("grid").clientHeight - PAD_BOTTOM;
+  const empties = hours.filter((h) => !used.has(h)).length;
+  const deficit = Math.max(0, hours.length * ROW_H - available);
+  const give = empties ? Math.min(ROW_H - ROW_H_COLLAPSED, deficit / empties) : 0;
+  // Floor, not round: rounding up puts the total back over the edge and the
+  // pane scrolls by a few pixels for no reason.
+  const emptyH = Math.max(ROW_H_COLLAPSED, Math.floor(ROW_H - give));
+  const heightOf = (h) => (used.has(h) ? ROW_H : emptyH);
 
   const offsets = {};
   let acc = 0;
@@ -186,7 +197,8 @@ function renderWeek() {
   gutter.className = "hours";
   for (const h of hours) {
     const c = document.createElement("div");
-    const small = heightOf(h) === ROW_H_COLLAPSED;
+    // Below about two thirds there is no room for "10 AM".
+    const small = heightOf(h) < ROW_H * 0.66;
     c.className = "hourCell" + (small ? " collapsed" : "");
     c.style.height = `${heightOf(h)}px`;
     const ampm = h < 12 ? "AM" : "PM";
@@ -592,6 +604,16 @@ $("today").onclick = (e) => {
 };
 
 $("hide").onclick = (e) => { e.stopPropagation(); invoke("cmd_hide"); };
+
+// Row heights are fitted to the pane, so a resize has to re-fit them.
+// Debounced, because a drag fires this continuously.
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.week) render();
+  }, 120);
+});
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
