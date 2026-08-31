@@ -64,6 +64,16 @@ fn weekday(t: &str) -> Option<Token> {
 fn time(t: &str) -> Option<Token> {
     // "12:00p" and "5p" are as common as the two-letter forms when people type
     // in a hurry, so both are accepted.
+    // "8 p.m." and "20:00:00" both turn up; strip the punctuation and any
+    // trailing seconds before looking at the rest.
+    let t = &t.replace('.', "");
+    // Drop seconds only when there really are seconds: stripping ":00" from
+    // "9:00" would leave "9" and quietly destroy every time range.
+    let t = if t.matches(':').count() == 2 {
+        t.rsplit_once(':').map(|(head, _)| head).unwrap_or(t)
+    } else {
+        t.as_str()
+    };
     let (body, shift) = if let Some(b) = t.strip_suffix("pm").or_else(|| t.strip_suffix('p')) {
         (b, 12)
     } else if let Some(b) = t.strip_suffix("am").or_else(|| t.strip_suffix('a')) {
@@ -115,10 +125,49 @@ fn estimate(t: &str) -> Option<Token> {
     None
 }
 
+const MONTHS: [&str; 12] = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+];
+
+/// Month index from a full or three-letter name. `sept` is accepted too,
+/// because people write it.
+fn month_of(t: &str) -> Option<u32> {
+    let t = t.trim_end_matches('.');
+    if t.len() < 3 {
+        return None;
+    }
+    if t == "sept" {
+        return Some(9);
+    }
+    MONTHS
+        .iter()
+        .position(|m| *m == t || m.starts_with(t) && t.len() == 3)
+        .map(|i| i as u32 + 1)
+}
+
+/// A day number, with or without an ordinal suffix: `2`, `2nd`, `23rd`.
+fn day_of(t: &str) -> Option<u32> {
+    let core = t.trim_end_matches(|c: char| c.is_ascii_alphabetic() || c == ',');
+    // Two digits at most: a four-digit number is a year, not a day.
+    if core.is_empty() || core.len() > 2 {
+        return None;
+    }
+    let n: u32 = core.parse().ok()?;
+    (1..=31).contains(&n).then_some(n)
+}
+
+fn year_of(t: &str) -> Option<i32> {
+    let core = t.trim_end_matches(',');
+    (core.len() == 4).then(|| core.parse().ok())?
+}
+
 fn relative(t: &str) -> Option<Token> {
     match t {
         "today" => Some(Token::Relative(0)),
         "tomorrow" => Some(Token::Relative(1)),
+        "noon" | "midday" => Some(Token::Time(12, 0)),
+        "midnight" => Some(Token::Time(0, 0)),
         _ => None,
     }
 }
@@ -193,10 +242,15 @@ fn daily(t: &str) -> Option<Token> {
 }
 
 /// Split a date on either separator, e.g. `9-02-2026` or `9/02/2026`.
-fn date_parts(t: &str) -> Option<Vec<&str>> {
-    let sep = if t.contains('-') { '-' } else { '/' };
+fn date_parts(t: &str) -> Option<(Vec<&str>, char)> {
+    let sep = ['-', '/', '.'].into_iter().find(|c| t.contains(*c))?;
     let parts: Vec<&str> = t.split(sep).collect();
-    (parts.len() == 2 || parts.len() == 3).then_some(parts)
+    (parts.len() == 2 || parts.len() == 3).then_some((parts, sep))
+}
+
+/// `26` means 2026. Two-digit years are read into this century.
+fn widen_year(y: u32) -> i32 {
+    if y < 100 { 2000 + y as i32 } else { y as i32 }
 }
 
 /// A written date: `2026-09-15`, `9-02-2026`, `9/02/2026`, or `9/2` with the
@@ -206,11 +260,11 @@ fn date_parts(t: &str) -> Option<Vec<&str>> {
 /// is not mistaken for one — chrono will happily read that as the year 1.
 ///
 /// Where one number is above 12 it can only be the day, which settles the
-/// order by itself. Where both could be a month the American order wins: it is
-/// this machine's locale and how these get typed here. The app echoes the date
-/// it resolved, so a wrong guess is visible rather than silent.
+/// order by itself. Where both could be a month, day comes first — the order
+/// the user asked for, and the one most of the world writes. The app echoes
+/// the date it resolved, so a wrong reading is visible rather than silent.
 fn date(t: &str) -> Option<Token> {
-    let parts = date_parts(t)?;
+    let (parts, sep) = date_parts(t)?;
     let nums: Vec<u32> = parts.iter().filter_map(|p| p.parse::<u32>().ok()).collect();
     if nums.len() != parts.len() {
         return None;
@@ -223,21 +277,82 @@ fn date(t: &str) -> Option<Token> {
             if parts[0].len() == 4 {
                 return NaiveDate::from_ymd_opt(a as i32, b, c).map(Token::Date);
             }
-            if parts[2].len() != 4 {
+            // Two or four digits; anything else is not a year.
+            if parts[2].len() != 4 && parts[2].len() != 2 {
                 return None;
             }
-            let (month, day) = if a > 12 { (b, a) } else { (a, b) };
-            NaiveDate::from_ymd_opt(c as i32, month, day).map(Token::Date)
+            let (day, month) = if b > 12 { (b, a) } else { (a, b) };
+            NaiveDate::from_ymd_opt(widen_year(c), month, day).map(Token::Date)
         }
         _ => {
+            // A dash between two small numbers is far more often a range
+            // ("read chapters 2-9") than a date, so two-part dates need a
+            // slash or a dot.
+            if sep == '-' {
+                return None;
+            }
             let (a, b) = (nums[0], nums[1]);
-            let (month, day) = if a > 12 { (b, a) } else { (a, b) };
+            let (day, month) = if b > 12 { (b, a) } else { (a, b) };
             if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
                 return None;
             }
             Some(Token::DayMonth(day, month))
         }
     }
+}
+
+/// Recognise a run of one to three trailing words as a single token.
+///
+/// Some things are only a token when read together — "2 Sep 2026", "Sep 2",
+/// "8:00 pm". Trying the longest window first means "Sep 2" is a date rather
+/// than a month name followed by an unrecognised number.
+fn recognise_window(win: &[&str]) -> Option<Token> {
+    match win.len() {
+        1 => recognise(win[0]),
+        2 => two_words(win[0], win[1]),
+        3 => three_words(win[0], win[1], win[2]),
+        _ => None,
+    }
+}
+
+fn two_words(a: &str, b: &str) -> Option<Token> {
+    let (la, lb) = (a.to_ascii_lowercase(), b.to_ascii_lowercase());
+
+    // "8:00 pm" — the meridiem written separately.
+    if matches!(lb.as_str(), "am" | "pm" | "a.m." | "p.m.") {
+        if let Some(t @ Token::Time(..)) = time(&format!("{la}{}", lb.replace('.', ""))) {
+            return Some(t);
+        }
+    }
+    // "2 Sep" and "Sep 2".
+    if let (Some(day), Some(month)) = (day_of(&la), month_of(&lb)) {
+        return day_month(day, month);
+    }
+    if let (Some(month), Some(day)) = (month_of(&la), day_of(&lb)) {
+        return day_month(day, month);
+    }
+    None
+}
+
+fn three_words(a: &str, b: &str, c: &str) -> Option<Token> {
+    let (la, lb, lc) = (
+        a.to_ascii_lowercase(),
+        b.to_ascii_lowercase(),
+        c.to_ascii_lowercase(),
+    );
+    // "2 Sep 2026" and "Sep 2, 2026".
+    let year = year_of(&lc)?;
+    let (day, month) = match (day_of(&la), month_of(&lb), month_of(&la), day_of(&lb)) {
+        (Some(d), Some(m), _, _) => (d, m),
+        (_, _, Some(m), Some(d)) => (d, m),
+        _ => return None,
+    };
+    NaiveDate::from_ymd_opt(year, month, day).map(Token::Date)
+}
+
+/// A day and month with no year: the next time that date comes round.
+fn day_month(day: u32, month: u32) -> Option<Token> {
+    (1..=31).contains(&day).then_some(Token::DayMonth(day, month))
 }
 
 fn recognise(raw: &str) -> Option<Token> {
@@ -296,24 +411,15 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
     let mut end = words.len();
 
     while end > 0 {
-        let raw = words[end - 1];
-
-        // "8:00 pm" — the meridiem written separately. Read as one token with
-        // the word before it, and consume both. Only the two-letter forms, so
-        // a trailing English "a" is never mistaken for one.
-        let lower = raw.to_ascii_lowercase();
-        if (lower == "am" || lower == "pm") && end >= 2 {
-            let joined = format!("{}{}", words[end - 2], lower);
-            if let Some(Token::Time(h, m)) = time(&joined) {
-                at = NaiveTime::from_hms_opt(h, m, 0);
-                consumed.push(raw.to_string());
-                consumed.push(words[end - 2].to_string());
-                end -= 2;
-                continue;
+        // Longest window first, so "Sep 2" beats a lone "2".
+        let mut hit = None;
+        for len in (1..=3.min(end)).rev() {
+            if let Some(tok) = recognise_window(&words[end - len..end]) {
+                hit = Some((len, tok));
+                break;
             }
         }
-
-        let Some(token) = recognise(raw) else { break };
+        let Some((len, token)) = hit else { break };
         match token {
             // Scanning right-to-left, so a repeated token of the same kind
             // leaves the leftmost value in place.
@@ -344,8 +450,10 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
             }
             Token::Zone { pinned: p } => pinned = p,
         }
-        consumed.push(raw.to_string());
-        end -= 1;
+        for w in words[end - len..end].iter().rev() {
+            consumed.push(w.to_string());
+        }
+        end -= len;
     }
     consumed.reverse();
     byday.reverse();

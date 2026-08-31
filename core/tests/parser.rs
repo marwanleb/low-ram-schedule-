@@ -119,11 +119,10 @@ fn several_weekdays_mean_a_repeat_not_a_due_date() {
 fn absolute_dates_parse_in_both_forms() {
     assert_eq!(parse("pay rent 2026-09-15", today()).due, Some(ymd(2026, 9, 15)));
 
-    // Two-part dates read month/day, matching the three-part forms and this
-    // machine's locale. `1/9` is 9 January, resolved to the next one.
-    assert_eq!(parse("pay rent 1/9", today()).due, Some(ymd(2027, 1, 9)));
-    // And where the first number cannot be a month, it settles itself.
-    assert_eq!(parse("pay rent 25/12", today()).due, Some(ymd(2026, 12, 25)));
+    // Day first, matching the three-part forms. `1/9` is 1 September.
+    assert_eq!(parse("pay rent 1/9", today()).due, Some(ymd(2026, 9, 1)));
+    // And where the second number cannot be a month, it settles itself.
+    assert_eq!(parse("pay rent 12/25", today()).due, Some(ymd(2026, 12, 25)));
 }
 
 /// Recurrence is stated, not guessed. One weekday plus `every` repeats; the
@@ -338,7 +337,7 @@ fn an_airport_pickup_parses() {
     let p = parse("Pick up a friend from the airport 9-02-2026 8:00 pm", today());
 
     assert_eq!(p.title, "Pick up a friend from the airport");
-    assert_eq!(p.due, Some(ymd(2026, 9, 2)));
+    assert_eq!(p.due, Some(ymd(2026, 2, 9)), "day-month-year");
     assert_eq!(p.at, Some(chrono::NaiveTime::from_hms_opt(20, 0, 0).unwrap()));
 }
 
@@ -353,14 +352,13 @@ fn a_meridiem_may_be_its_own_word() {
 }
 
 /// Three-part dates. Where one number cannot be a month it settles itself;
-/// where both could be, the American order wins, because that is the machine's
-/// locale and how these were typed.
+/// where both could be, day comes first.
 #[test]
 fn three_part_dates_resolve_sensibly() {
-    assert_eq!(parse("x 9-02-2026", today()).due, Some(ymd(2026, 9, 2)), "month first");
-    assert_eq!(parse("x 9/02/2026", today()).due, Some(ymd(2026, 9, 2)), "slashes too");
+    assert_eq!(parse("x 9-02-2026", today()).due, Some(ymd(2026, 2, 9)), "day first");
+    assert_eq!(parse("x 2/9/2026", today()).due, Some(ymd(2026, 9, 2)), "slashes too");
     assert_eq!(parse("x 25-12-2026", today()).due, Some(ymd(2026, 12, 25)), "25 can only be a day");
-    assert_eq!(parse("x 12/25/2026", today()).due, Some(ymd(2026, 12, 25)), "25 can only be a day");
+    assert_eq!(parse("x 12/25/2026", today()).due, Some(ymd(2026, 12, 25)), "25 can only be a month here");
     assert_eq!(parse("x 2026-09-02", today()).due, Some(ymd(2026, 9, 2)), "ISO still wins");
     // Not a date at all.
     assert_eq!(parse("x 45-99-2026", today()).title, "x 45-99-2026");
@@ -372,4 +370,77 @@ fn three_part_dates_resolve_sensibly() {
 fn a_version_number_is_not_a_date() {
     assert_eq!(parse("upgrade to 1-2-3", today()).title, "upgrade to 1-2-3");
     assert_eq!(parse("bump rustc to 1.95.0", today()).title, "bump rustc to 1.95.0");
+}
+
+// ── found by tools/parser_sweep.py, not by hand ──────────────────────────
+// The sweep enumerates date and time formats mechanically and checks each
+// against `dateutil`. Everything below is a form that a mature parser accepts
+// and this one silently dropped into the title.
+
+#[test]
+fn month_names_are_dates() {
+    let sep2 = ymd(2026, 9, 2);
+    for text in [
+        "x 2 Sep", "x 2 sep", "x 2 SEP", "x 2 September", "x 2 september",
+        "x Sep 2", "x September 2", "x sep 2",
+        "x 2 Sep 2026", "x Sep 2 2026", "x Sep 2, 2026", "x September 2, 2026",
+        "x 2nd September", "x September 2nd",
+    ] {
+        let p = parse(text, today());
+        assert_eq!(p.due, Some(sep2), "{text:?}");
+        assert_eq!(p.title, "x", "{text:?} left something in the title");
+    }
+}
+
+/// A month name on its own is not a date — there is no day in it, and
+/// guessing one would mangle "finish the essay in March".
+#[test]
+fn a_bare_month_name_is_not_a_date() {
+    assert_eq!(parse("finish the essay in March", today()).due, None);
+    assert_eq!(parse("finish the essay in March", today()).title, "finish the essay in March");
+    assert_eq!(parse("x September", today()).title, "x September");
+}
+
+#[test]
+fn noon_and_midnight_are_times() {
+    let t = |h| chrono::NaiveTime::from_hms_opt(h, 0, 0).unwrap();
+    assert_eq!(parse("lunch noon", today()).at, Some(t(12)));
+    assert_eq!(parse("lunch midday", today()).at, Some(t(12)));
+    assert_eq!(parse("deadline midnight", today()).at, Some(t(0)));
+    assert_eq!(parse("lunch noon", today()).title, "lunch");
+}
+
+#[test]
+fn dots_separate_dates_too() {
+    // How dates are written across most of Europe, where he spends months.
+    assert_eq!(parse("x 02.09.2026", today()).due, Some(ymd(2026, 9, 2)));
+    assert_eq!(parse("x 2.9.2026", today()).due, Some(ymd(2026, 9, 2)));
+}
+
+#[test]
+fn two_digit_years_are_understood() {
+    assert_eq!(parse("x 02/09/26", today()).due, Some(ymd(2026, 9, 2)));
+    assert_eq!(parse("x 02-09-26", today()).due, Some(ymd(2026, 9, 2)));
+}
+
+#[test]
+fn more_time_spellings() {
+    let t = |h, m| chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
+    assert_eq!(parse("x 8 p.m.", today()).at, Some(t(20, 0)));
+    assert_eq!(parse("x 8p.m.", today()).at, Some(t(20, 0)));
+    assert_eq!(parse("x 20:00:00", today()).at, Some(t(20, 0)));
+}
+
+/// Still not dates, and must stay out of the title.
+#[test]
+fn the_sweep_cases_that_should_keep_failing() {
+    for text in [
+        "upgrade to 1-2-3",
+        "bump rustc to 1.95.0",
+        "read chapters 2-9",
+        "call him on 5",
+    ] {
+        let p = parse(text, today());
+        assert_eq!(p.title, text, "{text:?} should be left whole");
+    }
 }
