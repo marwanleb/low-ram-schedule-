@@ -192,17 +192,52 @@ fn daily(t: &str) -> Option<Token> {
     (t == "daily" || t == "everyday").then_some(Token::Daily)
 }
 
-/// `2026-09-15` absolute, or `1/9` day/month with the year left open.
+/// Split a date on either separator, e.g. `9-02-2026` or `9/02/2026`.
+fn date_parts(t: &str) -> Option<Vec<&str>> {
+    let sep = if t.contains('-') { '-' } else { '/' };
+    let parts: Vec<&str> = t.split(sep).collect();
+    (parts.len() == 2 || parts.len() == 3).then_some(parts)
+}
+
+/// A written date: `2026-09-15`, `9-02-2026`, `9/02/2026`, or `9/2` with the
+/// year left open.
+///
+/// Three-part forms need a four-digit year, so a version number like `1-2-3`
+/// is not mistaken for one — chrono will happily read that as the year 1.
+///
+/// Where one number is above 12 it can only be the day, which settles the
+/// order by itself. Where both could be a month the American order wins: it is
+/// this machine's locale and how these get typed here. The app echoes the date
+/// it resolved, so a wrong guess is visible rather than silent.
 fn date(t: &str) -> Option<Token> {
-    if let Ok(d) = NaiveDate::parse_from_str(t, "%Y-%m-%d") {
-        return Some(Token::Date(d));
-    }
-    let (day, month) = t.split_once('/')?;
-    let (day, month): (u32, u32) = (day.parse().ok()?, month.parse().ok()?);
-    if !(1..=31).contains(&day) || !(1..=12).contains(&month) {
+    let parts = date_parts(t)?;
+    let nums: Vec<u32> = parts.iter().filter_map(|p| p.parse::<u32>().ok()).collect();
+    if nums.len() != parts.len() {
         return None;
     }
-    Some(Token::DayMonth(day, month))
+
+    match parts.len() {
+        3 => {
+            let (a, b, c) = (nums[0], nums[1], nums[2]);
+            // ISO: the year comes first.
+            if parts[0].len() == 4 {
+                return NaiveDate::from_ymd_opt(a as i32, b, c).map(Token::Date);
+            }
+            if parts[2].len() != 4 {
+                return None;
+            }
+            let (month, day) = if a > 12 { (b, a) } else { (a, b) };
+            NaiveDate::from_ymd_opt(c as i32, month, day).map(Token::Date)
+        }
+        _ => {
+            let (a, b) = (nums[0], nums[1]);
+            let (month, day) = if a > 12 { (b, a) } else { (a, b) };
+            if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+                return None;
+            }
+            Some(Token::DayMonth(day, month))
+        }
+    }
 }
 
 fn recognise(raw: &str) -> Option<Token> {
@@ -262,6 +297,22 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
 
     while end > 0 {
         let raw = words[end - 1];
+
+        // "8:00 pm" — the meridiem written separately. Read as one token with
+        // the word before it, and consume both. Only the two-letter forms, so
+        // a trailing English "a" is never mistaken for one.
+        let lower = raw.to_ascii_lowercase();
+        if (lower == "am" || lower == "pm") && end >= 2 {
+            let joined = format!("{}{}", words[end - 2], lower);
+            if let Some(Token::Time(h, m)) = time(&joined) {
+                at = NaiveTime::from_hms_opt(h, m, 0);
+                consumed.push(raw.to_string());
+                consumed.push(words[end - 2].to_string());
+                end -= 2;
+                continue;
+            }
+        }
+
         let Some(token) = recognise(raw) else { break };
         match token {
             // Scanning right-to-left, so a repeated token of the same kind

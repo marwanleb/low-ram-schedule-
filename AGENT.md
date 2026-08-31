@@ -114,8 +114,9 @@ Type what you want to remember. Plain text always works:
 Add details on the end. Anything the parser does not recognise stays
 in the title, so ordinary sentences are safe.
 
-  when        fri · friday · tomorrow · today · 2026-09-15 · 1/9
-  time        5pm · 5p · 17:00
+  when        fri · friday · tomorrow · today
+              2026-09-15 · 9-02-2026 · 9/2   (month first)
+  time        5pm · 5 pm · 5p · 17:00
   a block     9:00-10:15 · 10:30-12:00p   (scheduled; kept out of the list)
   repeating   every        (say it plainly; one weekday is enough)
               daily        (every day of the week)
@@ -131,6 +132,7 @@ in the title, so ordinary sentences are safe.
 > PHYS201 every monday wednesday 10:30-12:00p @Hall 2.106
 > gym every mon wed fri ~1h #body
 > wake up daily 08:00 #floating
+> pick up a friend from the airport 9-02-2026 8:00 pm
 > !! renew parking tomorrow
 
 Commands:

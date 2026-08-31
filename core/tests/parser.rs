@@ -118,8 +118,12 @@ fn several_weekdays_mean_a_repeat_not_a_due_date() {
 #[test]
 fn absolute_dates_parse_in_both_forms() {
     assert_eq!(parse("pay rent 2026-09-15", today()).due, Some(ymd(2026, 9, 15)));
-    // Day/month, resolved to the next such date.
-    assert_eq!(parse("pay rent 1/9", today()).due, Some(ymd(2026, 9, 1)));
+
+    // Two-part dates read month/day, matching the three-part forms and this
+    // machine's locale. `1/9` is 9 January, resolved to the next one.
+    assert_eq!(parse("pay rent 1/9", today()).due, Some(ymd(2027, 1, 9)));
+    // And where the first number cannot be a month, it settles itself.
+    assert_eq!(parse("pay rent 25/12", today()).due, Some(ymd(2026, 12, 25)));
 }
 
 /// Recurrence is stated, not guessed. One weekday plus `every` repeats; the
@@ -325,4 +329,47 @@ fn a_tag_after_a_location_is_still_a_tag() {
     assert_eq!(p.tags, vec!["work"]);
     assert_eq!(p.category.as_deref(), Some("work"));
     assert_eq!(p.byday, vec!["mon"]);
+}
+
+/// Real input that failed: a meridiem written as its own word, and a
+/// three-part date.
+#[test]
+fn an_airport_pickup_parses() {
+    let p = parse("Pick up a friend from the airport 9-02-2026 8:00 pm", today());
+
+    assert_eq!(p.title, "Pick up a friend from the airport");
+    assert_eq!(p.due, Some(ymd(2026, 9, 2)));
+    assert_eq!(p.at, Some(chrono::NaiveTime::from_hms_opt(20, 0, 0).unwrap()));
+}
+
+#[test]
+fn a_meridiem_may_be_its_own_word() {
+    let t = |h, m| chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
+    assert_eq!(parse("x 8:00 pm", today()).at, Some(t(20, 0)));
+    assert_eq!(parse("x 8 pm", today()).at, Some(t(20, 0)));
+    assert_eq!(parse("x 9:30 am", today()).at, Some(t(9, 30)));
+    // Both words are eaten, not just the marker.
+    assert_eq!(parse("x 8:00 pm", today()).title, "x");
+}
+
+/// Three-part dates. Where one number cannot be a month it settles itself;
+/// where both could be, the American order wins, because that is the machine's
+/// locale and how these were typed.
+#[test]
+fn three_part_dates_resolve_sensibly() {
+    assert_eq!(parse("x 9-02-2026", today()).due, Some(ymd(2026, 9, 2)), "month first");
+    assert_eq!(parse("x 9/02/2026", today()).due, Some(ymd(2026, 9, 2)), "slashes too");
+    assert_eq!(parse("x 25-12-2026", today()).due, Some(ymd(2026, 12, 25)), "25 can only be a day");
+    assert_eq!(parse("x 12/25/2026", today()).due, Some(ymd(2026, 12, 25)), "25 can only be a day");
+    assert_eq!(parse("x 2026-09-02", today()).due, Some(ymd(2026, 9, 2)), "ISO still wins");
+    // Not a date at all.
+    assert_eq!(parse("x 45-99-2026", today()).title, "x 45-99-2026");
+}
+
+/// A version number is not a date: three parts only count when the last is a
+/// four-digit year.
+#[test]
+fn a_version_number_is_not_a_date() {
+    assert_eq!(parse("upgrade to 1-2-3", today()).title, "upgrade to 1-2-3");
+    assert_eq!(parse("bump rustc to 1.95.0", today()).title, "bump rustc to 1.95.0");
 }
