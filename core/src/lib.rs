@@ -10,7 +10,7 @@ pub mod timer;
 
 pub use db::Db;
 pub use expand::get_week;
-pub use command::{help_text, interpret, Command};
+pub use command::{help_text, interpret, Command, ListScope};
 pub use import::{import, ImportOutcome, ImportRecord, ImportRepeat};
 pub use parse::{parse, Parsed};
 pub use stats::{stats, Stats};

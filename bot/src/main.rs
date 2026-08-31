@@ -12,7 +12,7 @@
 use chrono::{Local, Utc};
 use ms_core::{
     add_from_text, find_by_prefix, get_items, get_week, help_text, interpret, set_done, stats,
-    Command, Db, Filter,
+    Command, Db, Filter, ListScope,
 };
 use std::path::PathBuf;
 
@@ -82,6 +82,112 @@ fn fmt_mins(m: u32) -> String {
     }
 }
 
+/// What the bot is waiting on from this chat, if anything.
+///
+/// A line with no date is easy to fire off and then forget about, so it is
+/// held back and confirmed rather than filed silently. Lives in memory only:
+/// if the bot restarts mid-question the pending line is lost, which is why it
+/// is echoed back in the question itself.
+enum Pending {
+    /// Asked whether an undated capture was meant that way.
+    Confirm(String),
+    /// They said no, so the next message should supply a date.
+    AwaitingDate(String),
+}
+
+fn is_yes(t: &str) -> bool {
+    matches!(t, "y" | "yes" | "yeah" | "yep" | "ok" | "sure")
+}
+
+fn is_no(t: &str) -> bool {
+    matches!(t, "n" | "no" | "nope")
+}
+
+/// Handle a message, carrying whatever this chat was asked last.
+fn handle_with_state(db: &Db, text: &str, pending: &mut Option<Pending>) -> String {
+    let trimmed = text.trim().to_ascii_lowercase();
+
+    match pending.take() {
+        Some(Pending::Confirm(original)) if is_yes(&trimmed) => {
+            return commit(db, &original, "added");
+        }
+        Some(Pending::Confirm(original)) if is_no(&trimmed) => {
+            *pending = Some(Pending::AwaitingDate(original));
+            return "when is it due? (send a date, or anything else to start over)".into();
+        }
+        Some(Pending::Confirm(original)) => {
+            // Neither yes nor no: they have moved on. Keep the original rather
+            // than discard something they typed, and carry on with the new
+            // message.
+            let kept = commit(db, &original, "kept undated");
+            return format!("{kept}
+
+{}", handle_with_state(db, text, pending));
+        }
+        Some(Pending::AwaitingDate(original)) => {
+            // Their answer is a date fragment; glue it on and re-read the whole
+            // line, so the same grammar applies.
+            let combined = format!("{original} {}", text.trim());
+            let reparsed = ms_core::parse(&combined, Local::now().date_naive());
+            if reparsed.due.is_some() {
+                return commit(db, &combined, "added");
+            }
+            // Not a date. Never lose the capture: file it as it was and treat
+            // this message as a new one.
+            let kept = commit(db, &original, "kept undated — that did not read as a date");
+            return format!("{kept}
+
+{}", handle_with_state(db, text, pending));
+        }
+        None => {}
+    }
+
+    let today = Local::now().date_naive();
+    if let Command::Capture(p) = interpret(text, today) {
+        // Only ask about a plain undated to-do. A repeat, a scheduled block or
+        // anything with a date is already pinned to a time.
+        let undated = p.due.is_none() && !p.repeats && !p.scheduled && !p.title.trim().is_empty();
+        if undated {
+            *pending = Some(Pending::Confirm(text.to_string()));
+            return format!(
+                "no date on \"{}\" — is that right?
+(y to file it as is, n to give it a date)",
+                p.title
+            );
+        }
+    }
+
+    handle(db, text)
+}
+
+/// Store a capture and describe what was made of it.
+fn commit(db: &Db, text: &str, lead: &str) -> String {
+    let today = Local::now().date_naive();
+    let p = ms_core::parse(text, today);
+    match add_from_text(db, text, today, Utc::now()) {
+        Ok(item) => {
+            let mut out = format!("{lead}: {}", item.title);
+            if let Some(d) = item.due_at {
+                out.push_str(&format!(
+                    "
+due {}",
+                    d.with_timezone(&Local).format("%a %d %b %H:%M")
+                ));
+            }
+            if item.recurs {
+                out.push_str(&format!("
+repeats {}", p.byday.join(", ")));
+            }
+            if let Some(e) = item.estimate_min {
+                out.push_str(&format!("
+estimate {}", fmt_mins(e)));
+            }
+            out
+        }
+        Err(e) => format!("could not add: {e}"),
+    }
+}
+
 fn handle(db: &Db, text: &str) -> String {
     let today = Local::now().date_naive();
     let now = Utc::now();
@@ -89,7 +195,7 @@ fn handle(db: &Db, text: &str) -> String {
     match interpret(text, today) {
         Command::Help => help_text(),
 
-        Command::List => {
+        Command::List(scope) => {
             let items = get_items(
                 db,
                 &Filter {
@@ -99,11 +205,41 @@ fn handle(db: &Db, text: &str) -> String {
                     ..Default::default()
                 },
             );
-            if items.is_empty() {
-                return "nothing open".into();
+
+            // Today means due by the end of today, which includes anything
+            // already overdue. Week reaches seven days out. All is everything
+            // still open, dated or not.
+            let horizon = match scope {
+                ListScope::Today => Some(today),
+                ListScope::Week => Some(today + chrono::Duration::days(7)),
+                ListScope::All => None,
+            };
+            let shown: Vec<_> = items
+                .iter()
+                .filter(|i| match horizon {
+                    None => true,
+                    Some(limit) => i
+                        .due_at
+                        .is_some_and(|d| d.with_timezone(&Local).date_naive() <= limit),
+                })
+                .collect();
+
+            if shown.is_empty() {
+                return match scope {
+                    ListScope::Today => "nothing due today".into(),
+                    ListScope::Week => "nothing due this week".into(),
+                    ListScope::All => "nothing open".into(),
+                };
             }
-            let mut out = String::from("open:\n");
-            for i in &items {
+
+            let heading = match scope {
+                ListScope::Today => "due today",
+                ListScope::Week => "due this week",
+                ListScope::All => "open",
+            };
+            let mut out = format!("{heading}:
+");
+            for i in &shown {
                 let due = i
                     .due_at
                     .map(|d| d.with_timezone(&Local).format("  (%a %d %b)").to_string())
@@ -112,7 +248,17 @@ fn handle(db: &Db, text: &str) -> String {
                     .estimate_min
                     .map(|m| format!("  ~{}", fmt_mins(m)))
                     .unwrap_or_default();
-                out.push_str(&format!("· {}{}{}\n", i.title, due, est));
+                out.push_str(&format!("· {}{}{}
+", i.title, due, est));
+            }
+            // Undated items are invisible to the narrower views, so say how
+            // many are waiting rather than let them be forgotten.
+            if scope != ListScope::All {
+                let undated = items.iter().filter(|i| i.due_at.is_none()).count();
+                if undated > 0 {
+                    out.push_str(&format!("
+({undated} with no date — send `list` for everything)"));
+                }
             }
             out
         }
@@ -219,6 +365,10 @@ fn main() {
     eprintln!("msbot: polling, store at {}", path.display());
 
     let mut offset: i64 = 0;
+    // What each chat was last asked. In memory only, so a restart forgets any
+    // outstanding question — the question repeats the line back, so nothing
+    // typed is lost either way.
+    let mut pending: std::collections::HashMap<i64, Pending> = std::collections::HashMap::new();
     loop {
         let url = format!("{API}{token}/getUpdates?timeout={POLL_SECS}&offset={offset}");
         let resp = ureq::get(&url)
@@ -260,7 +410,11 @@ fn main() {
                 continue;
             };
 
-            let reply = handle(&db, text);
+            let mut chat_state = pending.remove(&chat_id);
+            let reply = handle_with_state(&db, text, &mut chat_state);
+            if let Some(state) = chat_state {
+                pending.insert(chat_id, state);
+            }
             send(&token, chat_id, &reply);
         }
     }

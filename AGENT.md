@@ -146,9 +146,14 @@ in the title, so ordinary sentences are safe.
 Commands:
 
   help          this text
-  list          what is due today
+  list          everything still open
+  list today    due today or overdue
+  list week     due in the next seven days
   week          this week's schedule
   done: <text>  tick off the first task matching <text>
+
+A line with no date is read back to you before it is filed, so something
+sent in a hurry does not quietly become a task with no when.
 ```
 
 ## What not to do

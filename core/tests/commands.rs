@@ -14,7 +14,7 @@ fn help_is_reachable_by_typing_it() {
 
 #[test]
 fn the_other_commands_are_recognised() {
-    assert_eq!(interpret("list", today()), Command::List);
+    assert_eq!(interpret("list", today()), Command::List(ms_core::ListScope::All));
     assert_eq!(interpret("week", today()), Command::Week);
     assert_eq!(interpret("done: math hw", today()), Command::Done("math hw".into()));
     assert_eq!(interpret("done math hw", today()), Command::Done("math hw".into()));
@@ -101,4 +101,38 @@ fn a_task_beginning_with_start_is_still_a_task() {
         panic!("should be a capture");
     };
     assert_eq!(p.title, "start the laundry");
+}
+
+/// `list` takes a scope, so the reply can be as short as the question.
+#[test]
+fn list_can_be_narrowed() {
+    use ms_core::ListScope;
+    assert_eq!(interpret("list", today()), Command::List(ListScope::All));
+    assert_eq!(interpret("list all", today()), Command::List(ListScope::All));
+    assert_eq!(interpret("list today", today()), Command::List(ListScope::Today));
+    assert_eq!(interpret("list week", today()), Command::List(ListScope::Week));
+    assert_eq!(interpret("/list today", today()), Command::List(ListScope::Today));
+    assert_eq!(interpret("LIST WEEK", today()), Command::List(ListScope::Week));
+}
+
+/// "today" on its own is the short way to ask the same thing.
+#[test]
+fn today_alone_is_the_short_form() {
+    use ms_core::ListScope;
+    assert_eq!(interpret("today", today()), Command::List(ListScope::Today));
+}
+
+/// But "week" alone still means the schedule — a different question.
+#[test]
+fn week_alone_is_still_the_schedule() {
+    assert_eq!(interpret("week", today()), Command::Week);
+}
+
+/// A task that merely begins with the word is still a task.
+#[test]
+fn list_inside_a_task_does_not_trigger() {
+    let Command::Capture(p) = interpret("list the christmas presents", today()) else {
+        panic!("should be a capture");
+    };
+    assert_eq!(p.title, "list the christmas presents");
 }

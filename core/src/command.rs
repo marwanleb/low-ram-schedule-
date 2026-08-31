@@ -1,10 +1,21 @@
 use crate::parse::{parse, Parsed};
 use chrono::NaiveDate;
 
+/// How much of the list to show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListScope {
+    /// Due today or already overdue.
+    Today,
+    /// Due within the next seven days.
+    Week,
+    /// Everything still open, dated or not.
+    All,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     Help,
-    List,
+    List(ListScope),
     Week,
     /// Mark done by title prefix.
     Done(String),
@@ -23,7 +34,11 @@ pub fn interpret(input: &str, today: NaiveDate) -> Command {
     match lower.as_str() {
         // Telegram sends /start on its own the first time a bot is opened.
         "help" | "?" | "h" | "start" | "hi" | "hello" => return Command::Help,
-        "list" | "today" => return Command::List,
+        "list" | "list all" => return Command::List(ListScope::All),
+        "list today" | "today" => return Command::List(ListScope::Today),
+        "list week" => return Command::List(ListScope::Week),
+        // "week" on its own is the schedule, which is a different question
+        // from "what is due this week".
         "week" => return Command::Week,
         _ => {}
     }
@@ -83,9 +98,14 @@ in the title, so ordinary sentences are safe.
 Commands:
 
   help          this text
-  list          what is due today
+  list          everything still open
+  list today    due today or overdue
+  list week     due in the next seven days
   week          this week's schedule
   done: <text>  tick off the first task matching <text>
+
+A line with no date is read back to you before it is filed, so something
+sent in a hurry does not quietly become a task with no when.
 "
     .to_string()
 }
