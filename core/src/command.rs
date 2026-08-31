@@ -51,12 +51,13 @@ pub fn help_text() -> String {
 Add details on the end. Anything the parser does not recognise stays
 in the title, so ordinary sentences are safe.
 
-  when        fri · friday · tomorrow · today
+  when        fri · friday · tues · mondays · tomorrow · today
               2 sep · 2 September 2026 · Sep 2
               2026-09-15 · 2-9-2026 · 2/9 · 2.9.26   (day first)
   time        5pm · 5 pm · 5p · 17:00 · noon · midnight
   a block     9:00-10:15 · 10:30-12:00p   (scheduled; kept out of the list)
   repeating   every        (say it plainly; one weekday is enough)
+              mondays      (the plural says it too)
               daily        (every day of the week)
   estimate    ~2h · ~90m · ~1.5h
   tag         #math        (#work #life #body #social also set the colour)
@@ -72,6 +73,8 @@ in the title, so ordinary sentences are safe.
 > wake up daily 08:00 #floating
 > pick up a friend from the airport 2 Sep 2026 8:00 pm
 > dentist 14 october 9:30 am
+> lab report due wed by 11:59 pm
+> gym mon/wed/fri 6am
 > !! renew parking tomorrow
 
 Commands:

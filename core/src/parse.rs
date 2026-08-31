@@ -32,6 +32,9 @@ pub const CATEGORIES: [&str; 4] = ["work", "life", "body", "social"];
 /// What a single trailing token turned out to mean.
 enum Token {
     Weekday(usize),
+    Weekdays(Vec<usize>),
+    /// A word like "at" or "due" that sits between a task and its details.
+    Filler,
     Time(u32, u32),
     Estimate(u32),
     /// Days from today: 0 = today, 1 = tomorrow.
@@ -52,12 +55,37 @@ const DAY_NAMES: [&str; 7] = [
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
 ];
 
-fn weekday(t: &str) -> Option<Token> {
+/// One weekday, written any of the ways people write them: `mon`, `monday`,
+/// `mondays`, `tues`, `thurs`.
+fn weekday_index(raw: &str) -> Option<usize> {
+    let t = raw.trim_end_matches('s');           // "mondays", "weds"
     DAY_CODES
         .iter()
         .position(|d| *d == t)
         .or_else(|| DAY_NAMES.iter().position(|d| *d == t))
-        .map(Token::Weekday)
+        // "tues", "thur", "thurs" — a prefix of the full name, four or more
+        // letters so nothing short and ambiguous slips through.
+        .or_else(|| {
+            (t.len() >= 4)
+                .then(|| DAY_NAMES.iter().position(|d| d.starts_with(t)))
+                .flatten()
+        })
+}
+
+fn weekday(t: &str) -> Option<Token> {
+    // "mon/wed/fri" is one word to the scanner but three days.
+    if t.contains('/') {
+        let days: Vec<usize> = t.split('/').filter_map(weekday_index).collect();
+        if days.len() > 1 && days.len() == t.split('/').count() {
+            return Some(Token::Weekdays(days));
+        }
+    }
+    weekday_index(t).map(Token::Weekday)
+}
+
+/// The plural says it repeats: "mondays" means every Monday.
+fn plural_weekday(t: &str) -> bool {
+    t.ends_with('s') && weekday_index(t).is_some() && weekday_index(t.trim_end_matches('s')).is_some()
 }
 
 /// `5pm`, `5:30pm`, `17:00`.
@@ -206,29 +234,48 @@ fn tag(raw: &str) -> Option<Token> {
 /// one word. It has to happen before the right-to-left scan, which would
 /// otherwise halt on "1.314" and never reach the marker.
 ///
-/// It stops at the next `#tag`, so "@Hall 2.106 #work" keeps the tag rather than
-/// swallowing it. An `@` mid-word ("bob@example.com") is not a marker.
+/// It stops at anything the scanner would recognise on its own — a tag, a time,
+/// a weekday — so "@starbucks 3pm" keeps the time. A bare "@" is a marker too,
+/// because people write "meet bob @ starbucks". An `@` mid-word
+/// ("bob@example.com") is not.
 fn split_location(input: &str) -> (String, Option<String>) {
     let words: Vec<&str> = input.split_whitespace().collect();
-    let Some(at) = words.iter().position(|w| w.starts_with('@') && w.len() > 1) else {
+    let Some(at) = words.iter().position(|w| w.starts_with('@')) else {
         return (input.to_string(), None);
     };
 
-    let stop = words[at + 1..]
+    let first = words[at].trim_start_matches('@');
+    let rest_from = at + 1;
+
+    // The place runs until something that means something on its own.
+    let stop = words[rest_from..]
         .iter()
-        .position(|w| w.starts_with('#'))
-        .map(|k| at + 1 + k)
+        .position(|w| w.starts_with('#') || recognise(w).is_some())
+        .map(|k| rest_from + k)
         .unwrap_or(words.len());
 
-    let mut place = words[at][1..].to_string();
-    for w in &words[at + 1..stop] {
-        place.push(' ');
+    let mut place = first.to_string();
+    for w in &words[rest_from..stop] {
+        if !place.is_empty() {
+            place.push(' ');
+        }
         place.push_str(w);
+    }
+    if place.is_empty() {
+        return (input.to_string(), None);
     }
 
     let mut head: Vec<&str> = words[..at].to_vec();
     head.extend_from_slice(&words[stop..]);
     (head.join(" "), Some(place))
+}
+
+/// Words people put between a task and its time. They carry no information
+/// themselves, but halting on one used to discard the date behind it too.
+/// Only reached inside a run of tokens — a line merely ending in "to" is
+/// untouched, because the scan stops before it.
+fn filler(t: &str) -> Option<Token> {
+    matches!(t, "at" | "on" | "by" | "due" | "from").then_some(Token::Filler)
 }
 
 fn every(t: &str) -> Option<Token> {
@@ -363,6 +410,7 @@ fn recognise(raw: &str) -> Option<Token> {
     }
     let t = raw.to_ascii_lowercase();
     weekday(&t)
+        .or_else(|| filler(&t))
         .or_else(|| every(&t))
         .or_else(|| daily(&t))
         .or_else(|| relative(&t))
@@ -426,10 +474,21 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
             Token::Estimate(m) => estimate_min = Some(m),
             Token::Time(h, m) => at = NaiveTime::from_hms_opt(h, m, 0),
             Token::Weekday(i) => {
+                if plural_weekday(&words[end - len].to_ascii_lowercase()) {
+                    repeats = true;
+                }
                 if !byday.contains(&DAY_CODES[i].to_string()) {
                     byday.push(DAY_CODES[i].to_string());
                 }
             }
+            Token::Weekdays(days) => {
+                for i in days {
+                    if !byday.contains(&DAY_CODES[i].to_string()) {
+                        byday.push(DAY_CODES[i].to_string());
+                    }
+                }
+            }
+            Token::Filler => {}
             Token::Relative(days) => due = today.checked_add_signed(Duration::days(days)),
             Token::Date(d) => due = Some(d),
             Token::DayMonth(d, m) => due = next_day_month(today, d, m),

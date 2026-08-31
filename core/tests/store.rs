@@ -273,3 +273,62 @@ fn a_location_is_kept_not_just_stripped() {
     assert_eq!(item.location.as_deref(), Some("Hall 2.106"));
     assert_eq!(ms_core::store::fetch(&db, &item.id).unwrap().location.as_deref(), Some("Hall 2.106"));
 }
+
+// ── found by a black-box tester that had not seen the code ───────────────
+
+/// A due time is a wall clock in the zone you are standing in. Storing "5pm"
+/// as 17:00 UTC makes it noon in Austin — every deadline five hours out.
+#[test]
+fn a_due_time_is_local_not_utc() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text_in(&db, "math hw fri 5pm", today(), now(), Chicago).unwrap();
+
+    let due = item.due_at.expect("has a due date");
+    let in_austin = due.with_timezone(&Chicago);
+    assert_eq!(in_austin.format("%H:%M").to_string(), "17:00", "5pm means 5pm where you are");
+    // Which is 22:00 UTC in September (CDT is UTC-5).
+    assert_eq!(due.format("%H:%M").to_string(), "22:00");
+}
+
+#[test]
+fn a_deadline_with_no_time_lands_at_the_end_of_the_local_day() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text_in(&db, "essay fri", today(), now(), Chicago).unwrap();
+    let in_austin = item.due_at.unwrap().with_timezone(&Chicago);
+    assert_eq!(in_austin.format("%H:%M").to_string(), "23:59");
+}
+
+/// Naming today's weekday after that hour has passed used to file the item as
+/// already overdue. A weekday means the next one that has not gone by.
+#[test]
+fn a_weekday_whose_time_has_passed_means_next_week() {
+    let db = Db::open_in_memory().unwrap();
+    // today() is Monday 2026-08-31; it is already 18:00 in Austin.
+    let evening = Chicago.with_ymd_and_hms(2026, 8, 31, 18, 0, 0).unwrap().to_utc();
+
+    let past = add_from_text_in(&db, "gym mon 10am", today(), evening, Chicago).unwrap();
+    assert_eq!(
+        past.due_at.unwrap().with_timezone(&Chicago).date_naive(),
+        NaiveDate::from_ymd_opt(2026, 9, 7).unwrap(),
+        "10am Monday has gone; it means next Monday"
+    );
+
+    // Still to come today, so it stays today.
+    let later = add_from_text_in(&db, "gym mon 11pm", today(), evening, Chicago).unwrap();
+    assert_eq!(
+        later.due_at.unwrap().with_timezone(&Chicago).date_naive(),
+        NaiveDate::from_ymd_opt(2026, 8, 31).unwrap(),
+    );
+}
+
+/// An explicit date is taken at its word, even if it is in the past — the user
+/// may be recording something they already missed.
+#[test]
+fn an_explicit_past_date_is_not_moved() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text_in(&db, "rent 1/8/2026", today(), now(), Chicago).unwrap();
+    assert_eq!(
+        item.due_at.unwrap().with_timezone(&Chicago).date_naive(),
+        NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+    );
+}

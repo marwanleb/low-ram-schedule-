@@ -49,6 +49,29 @@ pub struct Filter {
     pub on: Option<NaiveDate>,
 }
 
+/// Resolve a wall clock in a zone to a real instant.
+///
+/// `LocalResult` has three variants and all three happen: on the spring-forward
+/// morning the time does not exist, on the autumn one it happens twice.
+fn local_instant(zone: Tz, date: NaiveDate, time: NaiveTime) -> Option<DateTime<Utc>> {
+    use chrono::LocalResult;
+    match zone.from_local_datetime(&date.and_time(time)) {
+        LocalResult::Single(dt) => Some(dt.to_utc()),
+        // The earlier of the two, matching how blocks are placed.
+        LocalResult::Ambiguous(a, _) => Some(a.to_utc()),
+        LocalResult::None => {
+            // Skipped hour: the first instant that does exist that day.
+            (1..=180).find_map(|m| {
+                let probe = date.and_time(time) + Duration::minutes(m);
+                match zone.from_local_datetime(&probe) {
+                    LocalResult::Single(dt) => Some(dt.to_utc()),
+                    _ => None,
+                }
+            })
+        }
+    }
+}
+
 /// Deadlines land at the end of the day; nobody means midnight.
 const DEFAULT_DUE: (u32, u32) = (23, 59);
 
@@ -88,11 +111,24 @@ pub fn add_from_text_in(
     let p = parse(text, today);
     let id = new_id();
 
-    let due_at = p.due.map(|d| {
+    // A due time is a wall clock where you are standing, resolved through the
+    // zone and then stored as an instant. Labelling local time as UTC — which
+    // this did — puts every deadline out by the offset.
+    let due_at = p.due.and_then(|d| {
         let t = p
             .at
             .unwrap_or_else(|| NaiveTime::from_hms_opt(DEFAULT_DUE.0, DEFAULT_DUE.1, 0).unwrap());
-        Utc.from_utc_datetime(&d.and_time(t))
+        let mut when = local_instant(zone, d, t)?;
+
+        // A bare weekday means the next one still to come. Naming today's own
+        // weekday after that hour has passed used to file the item as already
+        // overdue, silently. An explicit date is left alone — it may be
+        // something already missed, deliberately recorded.
+        let from_weekday = !p.repeats && p.byday.len() == 1;
+        if from_weekday && when < now {
+            when = local_instant(zone, d + Duration::days(7), t)?;
+        }
+        Some(when)
     });
 
     db.conn.execute(

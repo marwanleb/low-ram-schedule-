@@ -444,3 +444,76 @@ fn the_sweep_cases_that_should_keep_failing() {
         assert_eq!(p.title, text, "{text:?} should be left whole");
     }
 }
+
+// ── found by a black-box tester that had not seen the code ───────────────
+
+/// "at", "on", "by", "due" sit between a task and its time constantly. They
+/// used to halt the scan, which threw away the date behind them as well.
+#[test]
+fn filler_words_do_not_halt_the_scan() {
+    let t = |h, m| chrono::NaiveTime::from_hms_opt(h, m, 0).unwrap();
+
+    let p = parse("flight to paris on sept 3 at 6:45am", today());
+    assert_eq!(p.title, "flight to paris");
+    assert_eq!(p.due, Some(ymd(2026, 9, 3)));
+    assert_eq!(p.at, Some(t(6, 45)));
+
+    let q = parse("lab report due wed by 11:59 pm", today());
+    assert_eq!(q.title, "lab report");
+    assert_eq!(q.at, Some(t(23, 59)));
+
+    let r = parse("lunch at noon monday", today());
+    assert_eq!(r.title, "lunch");
+    assert_eq!(r.at, Some(t(12, 0)));
+}
+
+/// A filler word on its own is still just a word.
+#[test]
+fn a_filler_word_alone_is_not_stripped() {
+    assert_eq!(parse("think about it", today()).title, "think about it");
+    assert_eq!(parse("the thing to do", today()).title, "the thing to do");
+}
+
+#[test]
+fn common_weekday_abbreviations_work() {
+    for (text, code) in [
+        ("x tues", "tue"), ("x thurs", "thu"), ("x weds", "wed"),
+        ("x tue", "tue"), ("x thur", "thu"),
+    ] {
+        assert_eq!(parse(text, today()).byday, vec![code], "{text:?}");
+    }
+}
+
+/// "mondays" reads as a repeat, which is what the plural means.
+#[test]
+fn a_plural_weekday_means_every_week() {
+    let p = parse("team meeting mondays at 3pm", today());
+    assert_eq!(p.title, "team meeting");
+    assert_eq!(p.byday, vec!["mon"]);
+    assert!(p.repeats, "the plural is the recurrence");
+}
+
+#[test]
+fn weekdays_may_be_separated_by_slashes() {
+    let p = parse("gym mon/wed/fri 6am", today());
+    assert_eq!(p.title, "gym");
+    assert_eq!(p.byday, vec!["mon", "wed", "fri"]);
+    assert!(p.repeats);
+}
+
+/// `@` with a space after it is still a location marker.
+#[test]
+fn an_at_sign_may_stand_alone() {
+    let p = parse("meet bob @ starbucks", today());
+    assert_eq!(p.title, "meet bob");
+    assert_eq!(p.location.as_deref(), Some("starbucks"));
+}
+
+/// A location must not swallow a time that follows it.
+#[test]
+fn a_location_stops_at_a_time() {
+    let p = parse("meet bob @starbucks 3pm", today());
+    assert_eq!(p.title, "meet bob");
+    assert_eq!(p.location.as_deref(), Some("starbucks"));
+    assert_eq!(p.at, Some(chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap()));
+}
