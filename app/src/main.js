@@ -787,6 +787,40 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+/* ── noticing writes from the bot and the CLI ───────────────────────── */
+// The window loaded its data once and then never looked again, so anything
+// sent to the Telegram bot sat invisible until something else forced a
+// redraw. There is no watcher by design; SQLite's data_version changes when
+// another connection writes, which is cheap to ask.
+let seenVersion = null;
+
+async function refreshIfChanged() {
+  try {
+    const v = await invoke("cmd_data_version");
+    if (seenVersion !== null && v !== seenVersion) {
+      seenVersion = v;
+      await refresh();
+      return;
+    }
+    seenVersion = v;
+  } catch {
+    // A failed check is not worth surfacing; the next one will do.
+  }
+}
+
+setInterval(() => {
+  if (!document.hidden) refreshIfChanged();
+}, 5000);
+
+// And immediately on being summoned, so it is never stale when you look at it.
+const tauriEvents = window.__TAURI__?.event;
+if (tauriEvents) {
+  tauriEvents.listen("window:shown", () => refresh());
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshIfChanged();
+});
+
 /* ── go ────────────────────────────────────────────────────────────── */
 state.anchor = iso(mondayOf(new Date()));
 startSky(document.getElementById("sky"));

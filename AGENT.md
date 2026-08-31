@@ -119,6 +119,8 @@ in the title, so ordinary sentences are safe.
               2026-09-15 · 2-9-2026 · 2/9 · 2.9.26   (day first)
   time        5pm · 5 pm · 5p · 17:00 · noon · midnight
   a block     9:00-10:15 · 10:30-12:00p   (scheduled; kept out of the list)
+  kind        due fri      → a task with a deadline
+              on fri 9am   → a block on the week
   repeating   every        (say it plainly; one weekday is enough)
               mondays      (the plural says it too)
               daily        (every day of the week)
@@ -137,6 +139,7 @@ in the title, so ordinary sentences are safe.
 > pick up a friend from the airport 2 Sep 2026 8:00 pm
 > dentist 14 october 9:30 am
 > lab report due wed by 11:59 pm
+> standup on friday 9am
 > gym mon/wed/fri 6am
 > !! renew parking tomorrow
 

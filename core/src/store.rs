@@ -177,6 +177,30 @@ pub fn add_from_text_in(
         )?;
     }
 
+    // "on" means it happens at a time, so give it a block on the week. The
+    // placement points at this same item — completing or timing it stays
+    // connected, unlike a copy. Spec 3.1.
+    if p.scheduled {
+        if let Some(date) = p.due {
+            let (start, end) = match p.span {
+                Some((a, b)) => (a, b),
+                None => {
+                    let a = p.at.unwrap_or_else(|| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+                    // An estimate is a better guess at how long than an
+                    // arbitrary hour, when one was given.
+                    let mins = p.estimate_min.unwrap_or(60).clamp(1, 12 * 60) as i64;
+                    (a, a + Duration::minutes(mins))
+                }
+            };
+            if let (Some(s), Some(e)) = (
+                local_instant(zone, date, start),
+                local_instant(zone, date, end),
+            ) {
+                let _ = add_placement(db, &id, &s.to_rfc3339(), &e.to_rfc3339());
+            }
+        }
+    }
+
     Ok(fetch(db, &id).expect("just inserted"))
 }
 

@@ -20,6 +20,10 @@ pub struct Parsed {
     pub category: Option<String>,
     pub location: Option<String>,
     pub priority: bool,
+    /// Written with "on": it happens at a time, so it belongs on the week
+    /// rather than in the list. Only set when there is actually a time to
+    /// place it at — otherwise the item would be in neither and vanish.
+    pub scheduled: bool,
     /// True = fixed to the zone it was created in; false = follows the machine.
     /// Defaults to true: a class that drifts to the wrong hour costs more than
     /// a gym slot that does.
@@ -33,8 +37,11 @@ pub const CATEGORIES: [&str; 4] = ["work", "life", "body", "social"];
 enum Token {
     Weekday(usize),
     Weekdays(Vec<usize>),
-    /// A word like "at" or "due" that sits between a task and its details.
+    /// A word that sits between a task and its details. "due" and "on" also
+    /// say which kind of thing it is; the rest carry nothing.
     Filler,
+    Due,
+    On,
     Time(u32, u32),
     Estimate(u32),
     /// Days from today: 0 = today, 1 = tomorrow.
@@ -275,7 +282,12 @@ fn split_location(input: &str) -> (String, Option<String>) {
 /// Only reached inside a run of tokens — a line merely ending in "to" is
 /// untouched, because the scan stops before it.
 fn filler(t: &str) -> Option<Token> {
-    matches!(t, "at" | "on" | "by" | "due" | "from").then_some(Token::Filler)
+    match t {
+        "due" => Some(Token::Due),
+        "on" => Some(Token::On),
+        "at" | "by" | "from" => Some(Token::Filler),
+        _ => None,
+    }
 }
 
 fn every(t: &str) -> Option<Token> {
@@ -456,6 +468,8 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
     let mut span_at: Option<(NaiveTime, NaiveTime)> = None;
     let mut tags: Vec<String> = Vec::new();
     let mut pinned = true;
+    let mut said_due = false;
+    let mut said_on = false;
     let mut end = words.len();
 
     while end > 0 {
@@ -489,6 +503,8 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
                 }
             }
             Token::Filler => {}
+            Token::Due => said_due = true,
+            Token::On => said_on = true,
             Token::Relative(days) => due = today.checked_add_signed(Duration::days(days)),
             Token::Date(d) => due = Some(d),
             Token::DayMonth(d, m) => due = next_day_month(today, d, m),
@@ -535,6 +551,11 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
         .find(|t| CATEGORIES.contains(&t.as_str()))
         .cloned();
 
+    // "on" puts it on the week, but only when there is a time to place it at;
+    // otherwise it would be in neither the list nor the schedule. "due" wins,
+    // because a deadline is the point of saying it.
+    let scheduled = said_on && !said_due && (at.is_some() || span_at.is_some());
+
     // A repeat has no single due date. Otherwise a lone weekday names the next
     // such day; several weekdays without `every` can only mean a repeat, so
     // they are treated as one.
@@ -556,7 +577,10 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
         due,
         repeats,
         span: span_at,
-        listed: span_at.is_none(),
+        // A span is a block. So is anything said with "on". Everything else
+        // belongs in the list.
+        listed: span_at.is_none() && !scheduled,
+        scheduled,
         tags,
         category,
         location: location_at,

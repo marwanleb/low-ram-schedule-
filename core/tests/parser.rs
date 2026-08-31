@@ -517,3 +517,46 @@ fn a_location_stops_at_a_time() {
     assert_eq!(p.location.as_deref(), Some("starbucks"));
     assert_eq!(p.at, Some(chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap()));
 }
+
+/// "due" and "on" say what kind of thing this is: something to finish by a
+/// time, or something that happens at one.
+#[test]
+fn due_makes_a_task_and_on_makes_a_block() {
+    let essay = parse("essay due friday", today());
+    assert_eq!(essay.title, "essay");
+    assert_eq!(essay.due, Some(ymd(2026, 9, 4)));
+    assert!(essay.listed, "a deadline belongs in the list");
+    assert!(!essay.scheduled);
+
+    let meeting = parse("standup on friday 9am", today());
+    assert_eq!(meeting.title, "standup");
+    assert_eq!(meeting.due, Some(ymd(2026, 9, 4)));
+    assert!(meeting.scheduled, "it happens at a time, so put it on the week");
+    assert!(!meeting.listed, "and keep it out of the list");
+}
+
+/// "due" wins when both appear — the deadline is the point.
+#[test]
+fn due_beats_on() {
+    let p = parse("lab report due wed by 11:59 pm", today());
+    assert!(p.listed);
+    assert!(!p.scheduled);
+}
+
+/// Without a time there is nothing to place, and an item that is neither
+/// listed nor on the week would simply vanish.
+#[test]
+fn on_without_a_time_stays_in_the_list() {
+    let p = parse("haircut on friday", today());
+    assert_eq!(p.title, "haircut");
+    assert_eq!(p.due, Some(ymd(2026, 9, 4)));
+    assert!(!p.scheduled, "nothing to place it at");
+    assert!(p.listed, "so it must still be somewhere");
+}
+
+/// The existing rule is unchanged: an explicit span is a block either way.
+#[test]
+fn a_span_is_still_a_block_without_the_keyword() {
+    let p = parse("MATH210 every mon 9:00-10:15", today());
+    assert!(!p.listed);
+}

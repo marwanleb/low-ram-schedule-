@@ -351,6 +351,17 @@ fn cmd_stats(state: State<'_, AppDb>, tag: Option<String>) -> Result<StatsDto, S
     })
 }
 
+/// SQLite bumps `data_version` when *another* connection writes. Cheap enough
+/// to ask repeatedly, and the only way this window learns that the bot or the
+/// CLI changed something — there is no watcher and no socket by design.
+#[tauri::command]
+fn cmd_data_version(state: State<'_, AppDb>) -> Result<i64, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db.conn
+        .query_row("PRAGMA data_version", [], |r| r.get(0))
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn cmd_help() -> String {
     help_text()
@@ -705,6 +716,7 @@ pub fn run() {
             cmd_zones,
             cmd_set_estimate,
             cmd_set_listed,
+            cmd_data_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running application");

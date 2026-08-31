@@ -361,3 +361,51 @@ fn a_repeating_item_reports_the_latest_tick() {
 
     assert_eq!(ms_core::store::fetch(&db, &trash.id).unwrap().completed_at, Some(later));
 }
+
+/// "on" is only meaningful if the thing actually lands on the week.
+#[test]
+fn on_puts_a_one_off_on_the_schedule() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text_in(&db, "standup on friday 9am", today(), now(), Chicago).unwrap();
+
+    assert!(!item.listed, "not in the to-do list");
+    assert!(!item.recurs, "and not a weekly rule either");
+
+    let week = ms_core::get_week(&db, today(), Chicago);
+    let friday = &week.days[4];
+    assert_eq!(friday.date, NaiveDate::from_ymd_opt(2026, 9, 4).unwrap());
+    assert_eq!(friday.placements.len(), 1, "it should be on Friday");
+    let p = &friday.placements[0];
+    assert_eq!(p.item_id, item.id, "the same item, not a copy");
+    assert_eq!(p.starts_at.format("%H:%M").to_string(), "09:00");
+    assert_eq!(p.ends_at.format("%H:%M").to_string(), "10:00", "an hour by default");
+}
+
+#[test]
+fn on_with_a_span_uses_the_span() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text_in(&db, "review on friday 14:00-16:00", today(), now(), Chicago).unwrap();
+    let week = ms_core::get_week(&db, today(), Chicago);
+    let p = &week.days[4].placements[0];
+    assert_eq!(p.item_id, item.id);
+    assert_eq!(p.ends_at.format("%H:%M").to_string(), "16:00");
+}
+
+/// An estimate is a better guess at how long than an arbitrary hour.
+#[test]
+fn on_uses_the_estimate_for_length_when_given() {
+    let db = Db::open_in_memory().unwrap();
+    add_from_text_in(&db, "deep work on friday 9am ~3h", today(), now(), Chicago).unwrap();
+    let week = ms_core::get_week(&db, today(), Chicago);
+    let p = &week.days[4].placements[0];
+    assert_eq!((p.ends_at - p.starts_at).num_minutes(), 180);
+}
+
+#[test]
+fn due_does_not_put_anything_on_the_week() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add_from_text_in(&db, "essay due friday 5pm", today(), now(), Chicago).unwrap();
+    assert!(item.listed);
+    let week = ms_core::get_week(&db, today(), Chicago);
+    assert!(week.days.iter().all(|d| d.placements.is_empty()), "a deadline is not a block");
+}
