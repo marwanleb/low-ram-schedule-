@@ -577,9 +577,11 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
         due,
         repeats,
         span: span_at,
-        // A span is a block. So is anything said with "on". Everything else
-        // belongs in the list.
-        listed: span_at.is_none() && !scheduled,
+        // A bare time range is a block and nothing else -- a class does not
+        // belong in a to-do list. "on" is different: it says when something
+        // happens, not that it stops being a thing to finish, so it gets an
+        // hour on the week AND stays tickable.
+        listed: span_at.is_none() || scheduled,
         scheduled,
         tags,
         category,

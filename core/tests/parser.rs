@@ -521,7 +521,7 @@ fn a_location_stops_at_a_time() {
 /// "due" and "on" say what kind of thing this is: something to finish by a
 /// time, or something that happens at one.
 #[test]
-fn due_makes_a_task_and_on_makes_a_block() {
+fn due_makes_a_task_and_on_makes_a_block_you_can_still_tick() {
     let essay = parse("essay due friday", today());
     assert_eq!(essay.title, "essay");
     assert_eq!(essay.due, Some(ymd(2026, 9, 4)));
@@ -532,7 +532,11 @@ fn due_makes_a_task_and_on_makes_a_block() {
     assert_eq!(meeting.title, "standup");
     assert_eq!(meeting.due, Some(ymd(2026, 9, 4)));
     assert!(meeting.scheduled, "it happens at a time, so put it on the week");
-    assert!(!meeting.listed, "and keep it out of the list");
+    assert!(meeting.listed, "and it is still a thing to finish, so keep it tickable");
+
+    // A bare range is a block and nothing else: a class is not a to-do.
+    let class = parse("MATH210 every mon 9:00-10:15", today());
+    assert!(!class.listed, "a timetable does not belong in the list");
 }
 
 /// "due" wins when both appear — the deadline is the point.

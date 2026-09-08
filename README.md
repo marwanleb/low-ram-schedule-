@@ -131,7 +131,7 @@ from the same function, and a test asserts every example in it actually parses.
 cargo test
 ```
 
-147 tests. The ones worth knowing about:
+149 tests. The ones worth knowing about:
 
 - `fuzz_totality` — 4,000 seeded cases of malformed data against every tzdata
   zone, asserting `get_week` never panics.

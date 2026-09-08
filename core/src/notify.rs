@@ -15,7 +15,7 @@ use crate::expand::get_week;
 use crate::store::{get_items, Filter, Item};
 use chrono::{DateTime, Datelike, Duration, Utc};
 use chrono_tz::Tz;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -47,6 +47,10 @@ pub fn due_soon(db: &Db, now: DateTime<Utc>, lead: Duration, zone: Tz) -> Vec<No
     let by_id: HashMap<&str, &Item> = items.iter().map(|i| (i.id.as_str(), i)).collect();
 
     let mut out = Vec::new();
+    // (item, instant) for every block announced, so the same thing said with
+    // "on" -- which is both a block and something to tick off -- is not
+    // announced twice at the same moment.
+    let mut placed: HashSet<(String, DateTime<Utc>)> = HashSet::new();
 
     // Two weeks, because the horizon can sit on the far side of Monday.
     let today = now.with_timezone(&zone).date_naive();
@@ -64,6 +68,7 @@ pub fn due_soon(db: &Db, now: DateTime<Utc>, lead: Duration, zone: Tz) -> Vec<No
                 if item.is_done(Some(day.date)) {
                     continue;
                 }
+                placed.insert((p.item_id.clone(), start));
                 out.push(Notice {
                     key: format!("{}@{}", p.id, start.to_rfc3339()),
                     kind: Kind::Block,
@@ -81,6 +86,9 @@ pub fn due_soon(db: &Db, now: DateTime<Utc>, lead: Duration, zone: Tz) -> Vec<No
         // A block already announces itself; only what sits in the list needs a
         // deadline reminder.
         if !item.listed || item.completed || due <= now || due > horizon {
+            continue;
+        }
+        if placed.contains(&(item.id.clone(), due)) {
             continue;
         }
         out.push(Notice {

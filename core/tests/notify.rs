@@ -146,3 +146,32 @@ fn nothing_scheduled_means_nothing_to_say() {
     add(&db, "renew parking", "2026-09-08", "2026-09-08T12:00:00Z");
     assert!(soon(&db, "2026-09-09T13:52:00Z").is_empty(), "an undated task has no moment");
 }
+
+#[test]
+fn an_on_item_is_announced_once_not_twice() {
+    let db = Db::open_in_memory().unwrap();
+    // "on" makes it a block AND leaves it in the list; both would otherwise
+    // fire at the same instant.
+    add(&db, "pick up a parcel on 09/09/2026 20:00", "2026-09-08", "2026-09-08T12:00:00Z");
+
+    let out = soon(&db, "2026-09-10T00:52:00Z");
+    assert_eq!(out.len(), 1, "one thing happening once: {out:?}");
+    assert_eq!(out[0].kind, Kind::Block, "the block says more than the deadline");
+}
+
+#[test]
+fn a_deadline_at_a_different_hour_still_gets_its_own_notice() {
+    let db = Db::open_in_memory().unwrap();
+    let item = add(&db, "essay due 09/09/2026 23:00", "2026-09-08", "2026-09-08T12:00:00Z");
+    // A block earlier the same day must not suppress the evening deadline.
+    ms_core::add_placement(
+        &db,
+        &item.id,
+        "2026-09-09T14:00:00-05:00",
+        "2026-09-09T15:00:00-05:00",
+    )
+    .unwrap();
+
+    assert_eq!(soon(&db, "2026-09-09T18:52:00Z").len(), 1, "the block");
+    assert_eq!(soon(&db, "2026-09-10T03:52:00Z").len(), 1, "the deadline, hours later");
+}

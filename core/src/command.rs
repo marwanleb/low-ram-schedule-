@@ -72,7 +72,7 @@ in the title, so ordinary sentences are safe.
   time        5pm · 5 pm · 5p · 17:00 · noon · midnight
   a block     9:00-10:15 · 10:30-12:00p   (scheduled; kept out of the list)
   kind        due fri      → a task with a deadline
-              on fri 9am   → a block on the week
+              on fri 9am   → an hour on the week, still tickable
   repeating   every        (say it plainly; one weekday is enough)
               mondays      (the plural says it too)
               daily        (every day of the week)

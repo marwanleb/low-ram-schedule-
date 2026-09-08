@@ -362,13 +362,15 @@ fn a_repeating_item_reports_the_latest_tick() {
     assert_eq!(ms_core::store::fetch(&db, &trash.id).unwrap().completed_at, Some(later));
 }
 
-/// "on" is only meaningful if the thing actually lands on the week.
+/// "on" is only meaningful if the thing actually lands on the week -- and it
+/// stays in the list too, because when something happens is not the same
+/// question as whether it is finished. One object, two ways to reach it.
 #[test]
-fn on_puts_a_one_off_on_the_schedule() {
+fn on_puts_a_one_off_on_the_schedule_and_leaves_it_tickable() {
     let db = Db::open_in_memory().unwrap();
     let item = add_from_text_in(&db, "standup on friday 9am", today(), now(), Chicago).unwrap();
 
-    assert!(!item.listed, "not in the to-do list");
+    assert!(item.listed, "still something to tick off");
     assert!(!item.recurs, "and not a weekly rule either");
 
     let week = ms_core::get_week(&db, today(), Chicago);
