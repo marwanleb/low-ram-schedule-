@@ -102,6 +102,23 @@ impl Db {
             );
 
             CREATE INDEX IF NOT EXISTS idx_sessions_item ON sessions(item_id);
+
+            -- Small facts that belong to the store rather than to any item:
+            -- which Telegram chat to push to, for one. A table rather than a
+            -- file so every process sees the same answer without a second
+            -- config path to keep in step.
+            CREATE TABLE IF NOT EXISTS settings (
+              key   TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            );
+
+            -- One row per notification already sent. Without it a restart --
+            -- or a poll two seconds later -- would push the same reminder
+            -- again, which is the fastest way to make someone mute a bot.
+            CREATE TABLE IF NOT EXISTS notified (
+              key     TEXT PRIMARY KEY,
+              sent_at TEXT NOT NULL
+            );
             ",
         )
     }

@@ -87,6 +87,23 @@ token = "..."
 
 That file is gitignored. Keep the token out of the repository.
 
+### Reminders
+
+Ten minutes before anything on the week starts, or anything in the list falls
+due, the bot pushes a message. There is nothing to switch on: it sends to
+whichever chat last spoke to it, so say anything once and reminders begin.
+
+The check runs at the top of every poll, which is at most 50 seconds apart, so
+a reminder lands between nine and ten minutes ahead rather than exactly ten.
+Every notice sent is recorded in the store, so a restart cannot repeat one, and
+a block you move announces itself again at its new time.
+
+To see what is coming without waiting for it:
+
+```sh
+cargo run -p ms-core --example notify_preview -- 60
+```
+
 The bot is a **separate process on purpose**. The app runs no background
 services; this is one you start when you want it. Messages sent while it is down
 are delivered when it comes back — Telegram queues them for 24 hours.
@@ -114,7 +131,7 @@ from the same function, and a test asserts every example in it actually parses.
 cargo test
 ```
 
-70 tests. The ones worth knowing about:
+147 tests. The ones worth knowing about:
 
 - `fuzz_totality` — 4,000 seeded cases of malformed data against every tzdata
   zone, asserting `get_week` never panics.
@@ -123,3 +140,5 @@ cargo test
 - `expansion` — recurrence, exceptions, and the spec's error catalogue.
 - `parser` — including the cases that must **not** parse, which matter more than
   the ones that do.
+- `notify` — what gets pushed and, more to the point, what does not: a block
+  already begun, an occurrence already ticked, a notice already sent.

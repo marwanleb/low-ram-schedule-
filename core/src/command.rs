@@ -106,6 +106,10 @@ Commands:
 
 A line with no date is read back to you before it is filed, so something
 sent in a hurry does not quietly become a task with no when.
+
+Ten minutes before anything on the week starts, or anything in the list
+falls due, this chat gets a reminder. Nothing to switch on — it pushes to
+whoever last spoke to it.
 "
     .to_string()
 }

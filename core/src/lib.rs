@@ -1,6 +1,7 @@
 pub mod db;
 pub mod expand;
 pub mod model;
+pub mod notify;
 pub mod command;
 pub mod import;
 pub mod parse;
@@ -16,7 +17,8 @@ pub use parse::{parse, Parsed};
 pub use stats::{stats, Stats};
 pub use store::{
     add_from_text, add_from_text_in, add_placement, delete_item, delete_placement, move_placement, find_by_prefix, get_items, local_zone,
-    set_done, set_estimate, set_listed, set_recurrence_tz, Filter, Item,
+    set_done, set_estimate, set_listed, set_recurrence_tz, set_setting, setting, Filter, Item,
 };
 pub use timer::{active_session, sweep_stale_sessions, timer_start, timer_stop, Session, Started};
 pub use model::{Day, Diagnostic, Level, Origin, Placement, Week};
+pub use notify::{already_sent, due_soon, mark_sent, prune_sent, Kind, Notice};

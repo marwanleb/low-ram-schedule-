@@ -9,10 +9,11 @@
 //! Parsing is the same `interpret()` the app and the CLI use — there is no
 //! second grammar and no LLM in the loop.
 
-use chrono::{Local, Utc};
+use chrono::{DateTime, Duration, Local, Utc};
 use ms_core::{
-    add_from_text, find_by_prefix, get_items, get_week, help_text, interpret, set_done, stats,
-    Command, Db, Filter, ListScope,
+    add_from_text, already_sent, due_soon, find_by_prefix, get_items, get_week, help_text,
+    interpret, mark_sent, prune_sent, set_done, set_setting, setting, stats, Command, Db, Filter,
+    Kind, ListScope, Notice,
 };
 use std::path::PathBuf;
 
@@ -20,6 +21,12 @@ const API: &str = "https://api.telegram.org/bot";
 /// Long-poll timeout. Telegram holds the connection open until something
 /// arrives, so this costs one idle socket rather than repeated requests.
 const POLL_SECS: u64 = 50;
+/// How far ahead a reminder goes out. A constant rather than a setting: ten
+/// minutes was the ask, and a knob nobody turns is a knob that can be wrong.
+const LEAD_MIN: i64 = 10;
+/// Where to push. The bot has no other way to learn an address, so it records
+/// whoever last spoke to it.
+const CHAT_KEY: &str = "telegram_chat";
 
 fn token() -> Option<String> {
     if let Ok(t) = std::env::var("TELEGRAM_TOKEN") {
@@ -70,6 +77,51 @@ fn send(token: &str, chat_id: i64, text: &str) {
     };
     let _ = ureq::post(&format!("{API}{token}/sendMessage"))
         .send_json(ureq::json!({ "chat_id": chat_id, "text": body }));
+}
+
+/// One reminder, as a person would read it.
+fn describe(n: &Notice, now: DateTime<Utc>, zone: chrono_tz::Tz) -> String {
+    // Rounded up, so a notice fired at nine and a half minutes still says ten.
+    let mins = ((n.at - now).num_seconds() as f64 / 60.0).ceil().max(0.0) as i64;
+    let starts = n.at.with_timezone(&zone);
+    let mut out = match n.kind {
+        Kind::Block => format!("in {mins} min \u{2014} {}", n.title),
+        Kind::Deadline => format!("due in {mins} min \u{2014} {}", n.title),
+    };
+    match n.ends {
+        Some(e) => out.push_str(&format!(
+            "\n{}-{}",
+            starts.format("%H:%M"),
+            e.with_timezone(&zone).format("%H:%M")
+        )),
+        None => out.push_str(&format!("\nby {}", starts.format("%H:%M"))),
+    }
+    if let Some(loc) = &n.location {
+        out.push_str(&format!(" \u{b7} {loc}"));
+    }
+    out
+}
+
+/// Send anything newly due, once.
+///
+/// Called at the top of every poll, so the worst case is one long-poll late: a
+/// notice lands 9 to 10 minutes ahead rather than exactly 10. Widening the
+/// window instead would risk a gap between two ticks.
+fn push_due(db: &Db, token: &str, zone: chrono_tz::Tz) {
+    let Some(chat) = setting(db, CHAT_KEY).and_then(|s| s.parse::<i64>().ok()) else {
+        return;
+    };
+    let now = Utc::now();
+    for n in due_soon(db, now, Duration::minutes(LEAD_MIN), zone) {
+        if already_sent(db, &n.key) {
+            continue;
+        }
+        send(token, chat, &describe(&n, now, zone));
+        // Recorded even when the send failed: a reminder that arrives twice is
+        // worse than one that is missed, and the next occurrence is a new key.
+        let _ = mark_sent(db, &n.key, now);
+    }
+    let _ = prune_sent(db, now - Duration::days(7));
 }
 
 fn fmt_mins(m: u32) -> String {
@@ -369,7 +421,12 @@ fn main() {
     // outstanding question — the question repeats the line back, so nothing
     // typed is lost either way.
     let mut pending: std::collections::HashMap<i64, Pending> = std::collections::HashMap::new();
+    let zone = local_zone();
     loop {
+        // Top of the loop, not the bottom: several arms below `continue`, and a
+        // reminder must not depend on the poll having succeeded.
+        push_due(&db, &token, zone);
+
         let url = format!("{API}{token}/getUpdates?timeout={POLL_SECS}&offset={offset}");
         let resp = ureq::get(&url)
             .timeout(std::time::Duration::from_secs(POLL_SECS + 15))
@@ -409,6 +466,10 @@ fn main() {
                 send(&token, chat_id, "I only understand text.");
                 continue;
             };
+
+            // Learn where to push. Cheap, and it means reminders start
+            // working the first time you say anything at all.
+            let _ = set_setting(&db, CHAT_KEY, &chat_id.to_string());
 
             let mut chat_state = pending.remove(&chat_id);
             let reply = handle_with_state(&db, text, &mut chat_state);

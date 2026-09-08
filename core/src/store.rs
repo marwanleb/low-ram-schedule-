@@ -478,3 +478,22 @@ pub fn set_listed(db: &Db, id: &str, listed: bool) -> rusqlite::Result<()> {
     )?;
     Ok(())
 }
+
+/// Read one small store-wide fact. See the `settings` table in `db.rs`.
+pub fn setting(db: &Db, key: &str) -> Option<String> {
+    db.conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            rusqlite::params![key],
+            |r| r.get::<_, String>(0),
+        )
+        .ok()
+}
+
+pub fn set_setting(db: &Db, key: &str, value: &str) -> rusqlite::Result<()> {
+    db.conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+        rusqlite::params![key, value],
+    )?;
+    Ok(())
+}
