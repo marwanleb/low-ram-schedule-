@@ -808,7 +808,10 @@ function openSlot(hit) {
   state.slotBox = box;
   input.focus();
 
-  input.onkeydown = async (e) => {
+  // Deliberately not async: a throw inside an async handler nobody awaits is
+  // an unhandled rejection, which is silent. This one hands the await off to
+  // fileSlot, so a failure here would reach window.onerror instead of vanishing.
+  input.onkeydown = (e) => {
     // Escape and "/" are window-wide shortcuts; while typing they are text.
     e.stopPropagation();
     if (e.key === "Escape") return closeSlot();
@@ -818,22 +821,29 @@ function openSlot(hit) {
     if (!typed) return;
     const p2 = (n) => String(n).padStart(2, "0");
     const when = `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
-    try {
-      const res = await invoke("cmd_add", {
-        text: `${typed} on ${when} ${p2(hit.hour)}:00`,
-      });
-      await refresh();
-      showEcho(res);
-    } catch (err) {
-      showError(String(err));
-    }
+    fileSlot(`${typed} on ${when} ${p2(hit.hour)}:00`);
   };
   input.onblur = closeSlot;
 }
 
+async function fileSlot(text) {
+  try {
+    const res = await invoke("cmd_add", { text });
+    await refresh();
+    showEcho(res);
+  } catch (err) {
+    showError(String(err));
+  }
+}
+
 function closeSlot() {
-  state.slotBox?.remove();
+  // The box holds the focused input, so removing it fires `blur`, which calls
+  // this again. Drop the reference before removing: the re-entrant call then
+  // does nothing, rather than trying to detach a node that has already gone
+  // and throwing NotFoundError out of the key handler.
+  const box = state.slotBox;
   state.slotBox = null;
+  box?.remove();
 }
 
 function rfc(d) {
