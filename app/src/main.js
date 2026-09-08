@@ -24,6 +24,7 @@ const state = {
   session: null,      // running timer, or null
   pinDay: null,       // clicked day — sticky filter
   peekDay: null,      // hover-held day — transient, also widens the column
+  slotBox: null,      // open slot composer; while it exists the grid holds still
   focus: "schedule",
 };
 
@@ -220,6 +221,11 @@ function renderWeek() {
       + (state.peekDay === day.date ? " peek" : "")
       + (day.date === wideDay ? " wide" : "");
     armPeek(col, day.date);
+    col.onclick = (e) => {
+      // An existing block owns its own click; so does the composer once open.
+      if (e.target.closest(".ev, .slotAdd")) return;
+      openSlot(hitTest(e.clientX, e.clientY));
+    };
     col.style.height = `${acc}px`;
     for (const h of hours) {
       const sp = document.createElement("div");
@@ -313,6 +319,17 @@ function bucketOf(item) {
   return due < endOfWeek ? "week" : "someday";
 }
 
+/** Nearest deadline first. Undated sink to the bottom, and so do ticked
+ *  items — they clear themselves within the hour and should not push a live
+ *  deadline down the list while they wait. */
+function byDate(a, b) {
+  if (a.done !== b.done) return a.done ? 1 : -1;
+  const ta = a.due_at ? new Date(a.due_at).getTime() : Infinity;
+  const tb = b.due_at ? new Date(b.due_at).getTime() : Infinity;
+  if (ta !== tb) return ta - tb;
+  return a.title.localeCompare(b.title);
+}
+
 function renderTodos() {
   const wrap = $("buckets");
   wrap.innerHTML = "";
@@ -349,6 +366,7 @@ function renderTodos() {
 
   const groups = { today: [], week: [], someday: [] };
   for (const i of pool) groups[bucketOf(i)].push(i);
+  for (const key in groups) groups[key].sort(byDate);
 
   const labels = { today: "TODAY", week: "THIS WEEK", someday: "SOMEDAY" };
   for (const key of ["today", "week", "someday"]) {
@@ -483,7 +501,7 @@ setInterval(tickTimer, 1000);
 // Ticked items clear on their own, so a window left open has to notice the
 // hour passing. Re-renders only when something has actually aged out.
 setInterval(() => {
-  if (!state.week) return;
+  if (!state.week || state.slotBox) return;
   const now = Date.now();
   const stale = state.items.some(
     (i) => i.listed && i.done && i.completed_at &&
@@ -661,6 +679,7 @@ function armPeek(node, date) {
   node.addEventListener("pointerenter", () => {
     clearTimeout(peekTimer);
     peekTimer = setTimeout(() => {
+      if (state.slotBox) return;
       if (state.peekDay === date) return;
       state.peekDay = date;
       render();
@@ -668,6 +687,7 @@ function armPeek(node, date) {
   });
   node.addEventListener("pointerleave", () => {
     clearTimeout(peekTimer);
+    if (state.slotBox) return;
     if (state.peekDay === date) {
       state.peekDay = null;
       render();
@@ -747,10 +767,13 @@ function hitTest(x, y) {
     let acc = r.top;
     for (const h of z.hours) {
       const height = z.heightOf(h);
-      if (y >= acc && y < acc + height) return { date: z.date, hour: h, col: z.col };
+      if (y >= acc && y < acc + height) {
+        return { date: z.date, hour: h, col: z.col, top: acc - r.top, height };
+      }
       acc += height;
     }
-    return { date: z.date, hour: z.hours[z.hours.length - 1], col: z.col };
+    const last = z.hours[z.hours.length - 1];
+    return { date: z.date, hour: last, col: z.col, top: r.height - z.heightOf(last), height: z.heightOf(last) };
   }
   return null;
 }
@@ -760,6 +783,57 @@ function highlight(hit) {
   if (lastHighlight && lastHighlight !== hit?.col) lastHighlight.classList.remove("dropTarget");
   if (hit) hit.col.classList.add("dropTarget");
   lastHighlight = hit?.col || null;
+}
+
+/* ── click an empty hour to put something in it ──────────────────────── */
+/** The slot supplies "on <date> <hour>"; the rest of the line goes through the
+ *  ordinary grammar, so an estimate, a tag or a place written here mean what
+ *  they mean anywhere else. There is no second path into the store. */
+function openSlot(hit) {
+  closeSlot();
+  if (!hit) return;
+
+  const d = fromIso(hit.date);
+  const box = document.createElement("div");
+  box.className = "slotAdd";
+  box.style.top = `${hit.top}px`;
+  box.style.height = `${Math.max(24, hit.height - 2)}px`;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  const h12 = hit.hour % 12 === 0 ? 12 : hit.hour % 12;
+  input.placeholder = `${WD[(d.getDay() + 6) % 7]} ${h12}${hit.hour < 12 ? "am" : "pm"} — what's on?`;
+  box.appendChild(input);
+  hit.col.appendChild(box);
+  state.slotBox = box;
+  input.focus();
+
+  input.onkeydown = async (e) => {
+    // Escape and "/" are window-wide shortcuts; while typing they are text.
+    e.stopPropagation();
+    if (e.key === "Escape") return closeSlot();
+    if (e.key !== "Enter") return;
+    const typed = input.value.trim();
+    closeSlot();
+    if (!typed) return;
+    const p2 = (n) => String(n).padStart(2, "0");
+    const when = `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
+    try {
+      const res = await invoke("cmd_add", {
+        text: `${typed} on ${when} ${p2(hit.hour)}:00`,
+      });
+      await refresh();
+      showEcho(res);
+    } catch (err) {
+      showError(String(err));
+    }
+  };
+  input.onblur = closeSlot;
+}
+
+function closeSlot() {
+  state.slotBox?.remove();
+  state.slotBox = null;
 }
 
 function rfc(d) {
@@ -795,6 +869,7 @@ function hexA(hex, a) {
 let seenVersion = null;
 
 async function refreshIfChanged() {
+  if (state.slotBox) return;
   try {
     const v = await invoke("cmd_data_version");
     if (seenVersion !== null && v !== seenVersion) {
