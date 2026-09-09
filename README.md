@@ -104,7 +104,7 @@ or a line in `%APPDATA%\com.marwan.schedule\bot.toml`:
 token = "..."
 ```
 
-That file is gitignored. Keep the token out of the repository.
+That file is gitignored. 
 
 ### Reminders
 
