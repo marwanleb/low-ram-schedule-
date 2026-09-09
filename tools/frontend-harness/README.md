@@ -20,8 +20,12 @@ window.__calls        // every invoke, in order, with its arguments
 window.__state        // the app's own state object
 ```
 
-The stub's week has no placements, so every hour is empty and clickable. It is
-deliberately not a fixture of the real store — this is for behaviour, not data.
+The stub serves an invented term — a few courses, a gym habit, a to-do list
+with a running timer — which is what `docs/screenshots/` is made from. Add
+`?empty` to the URL for a blank week instead, which is what you want when
+testing a gesture that needs a free hour to click into.
+
+None of it comes from a real store. It is a fixture, not a backup.
 
 This found the bug where clicking an empty hour opened a box that could not
 post: `Element.remove()` on the composer blurred the input inside it, which

@@ -1,15 +1,128 @@
 // Stands in for the Tauri backend so the real frontend can run in a browser.
-// Every call is logged, so a gesture that should reach the store but does not
-// is visible in the console.
+//
+// Two modes. By default the week is populated with an invented term — enough
+// to see layout, colour and density, and what the README screenshots are made
+// from. `?empty` gives a blank week instead, which is what you want when
+// testing a gesture that needs a free hour to click into.
+//
+// Every invoke is logged and recorded in `window.__calls`, so a gesture that
+// should reach the store but does not is visible as an absence.
+
+const EMPTY = new URLSearchParams(location.search).has("empty");
+
+// A Monday, so the week starts where the app starts it.
+const MONDAY = "2026-09-07";
+const iso = (offset) => {
+  const d = new Date(2026, 8, 7 + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+// Chicago is UTC-5 in September; the frontend renders whatever offset it is given.
+const at = (offset, hhmm) => `${iso(offset)}T${hhmm}:00-05:00`;
+
+let seq = 0;
+const uid = (p) => `${p}_${(++seq).toString().padStart(4, "0")}`;
+
+/** A class: the same item placed on several days. */
+function course(title, days, start, end, place, category) {
+  const id = uid("itm");
+  return days.map((d) => ({
+    id: `plc_${iso(d)}_${id}`,
+    item_id: id,
+    title,
+    category,
+    location: place,
+    starts_at: at(d, start),
+    ends_at: at(d, end),
+    origin: "recurrence",
+    pinned_tz: "America/Chicago",
+    foreign: false,
+    recurs: true,
+    done: false,
+  }));
+}
+
+function oneOff(title, day, start, end, place, category, done = false) {
+  const id = uid("itm");
+  return [{
+    id: uid("plc"),
+    item_id: id,
+    title,
+    category,
+    location: place,
+    starts_at: at(day, start),
+    ends_at: at(day, end),
+    origin: "oneoff",
+    pinned_tz: null,
+    foreign: false,
+    recurs: false,
+    done,
+  }];
+}
+
+const blocks = EMPTY ? [] : [
+  ...course("PHYS201", [0, 2], "10:30", "12:00", "Hall 2.106", "work"),
+  ...course("MATH210", [0, 2, 4], "09:00", "10:00", "Hall 1.204", "work"),
+  ...course("STAT240 lab", [3], "14:00", "17:00", "Lab 3.210", "work"),
+  ...course("gym", [1, 3, 4], "07:00", "08:00", null, "body"),
+  ...oneOff("coffee with Sam", 1, "15:00", "16:00", "the corner cafe", "social"),
+  ...oneOff("dentist", 2, "16:30", "17:15", null, "life"),
+  ...oneOff("dinner at Ana's", 4, "19:00", "21:00", null, "social"),
+  ...oneOff("seminar reading", 1, "20:00", "21:30", null, "work"),
+];
+
 const days = [];
 for (let i = 0; i < 7; i++) {
-  const d = new Date(2026, 8, 7 + i);
-  days.push({
-    date: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
-    placements: [],
-  });
+  days.push({ date: iso(i), placements: blocks.filter((p) => p.starts_at.startsWith(iso(i))) });
 }
-const week = { anchor: "2026-09-07", viewing_tz: "America/Chicago", days, diagnostics: [] };
+const week = { anchor: MONDAY, viewing_tz: "America/Chicago", days, diagnostics: [] };
+
+function todo(title, dueOffset, dueTime, opts = {}) {
+  return {
+    id: uid("itm"),
+    title,
+    tags: opts.tags || [],
+    category: opts.category || null,
+    location: null,
+    listed: true,
+    due_at: dueOffset === null ? null : at(dueOffset, dueTime),
+    estimate_min: opts.estimate_min || null,
+    recurs: false,
+    done: opts.done || false,
+    done_on: [],
+    // Recent, not fixed: a ticked item clears itself after an hour, so a
+    // hardcoded timestamp would have aged out by the time anyone looked.
+    completed_at: opts.done ? new Date(Date.now() - 10 * 60000).toISOString() : null,
+    source: "self",
+    external_id: null,
+    spent_sec: opts.spent_sec || 0,
+  };
+}
+
+// "Today" in these screenshots is Tuesday 8 September.
+const items = EMPTY ? [] : [
+  todo("PHYS201 problem set 4", 1, "23:59", { estimate_min: 120, category: "work", spent_sec: 2700 }),
+  todo("pay the phone bill", 1, "18:00", { category: "life" }),
+  todo("email the lab about lost keys", 1, "17:00", { estimate_min: 15, category: "work", done: true }),
+  todo("MATH210 quiz 3", 2, "23:59", { estimate_min: 60, category: "work" }),
+  todo("draft the internship email", 3, "12:00", { estimate_min: 30, category: "work" }),
+  todo("return the library books", 4, "17:00", { category: "life" }),
+  todo("farmers market", 5, "10:00", { category: "life" }),
+  todo("call home", 5, "18:00", { estimate_min: 30, category: "social" }),
+  todo("book flights home", 6, "23:59", { estimate_min: 45, category: "life" }),
+  todo("renew parking", null, null, { category: "life" }),
+  todo("fix the bike", null, null, { estimate_min: 90, category: "body" }),
+  todo("start the reading list", null, null, {}),
+];
+
+const session = EMPTY ? null : {
+  id: "ses_0001",
+  item_id: items[0].id,
+  title: items[0].title,
+  started_at: new Date(Date.now() - 45 * 60000).toISOString(),
+  estimate_min: 120,
+  spent_sec: 2700,
+};
+
 window.__calls = [];
 window.__TAURI__ = {
   core: {
@@ -18,15 +131,13 @@ window.__TAURI__ = {
       console.log("[INVOKE]", cmd, JSON.stringify(args || {}));
       switch (cmd) {
         case "cmd_get_week": return week;
-        case "cmd_get_items": return [];
-        case "cmd_active_session": return null;
-        case "cmd_stats": return { phrase: null, n: 0 };
+        case "cmd_get_items": return items;
+        case "cmd_active_session": return session;
+        case "cmd_stats": return EMPTY ? { phrase: null, n: 0 } : { phrase: "about a third longer", n: 18 };
         case "cmd_data_version": return 1;
-        case "cmd_help": return "help";
+        case "cmd_help": return "run `sched help` for the real thing";
         case "cmd_add": return {
-          item: { id: "itm_stub", title: args.text, tags: [], category: null, location: null,
-                  listed: true, due_at: null, estimate_min: null, recurs: false, done: false,
-                  completed_at: null, spent_sec: 0 },
+          item: { ...todo(args.text, null, null, {}), id: "itm_new" },
           consumed: ["stub"], byday: [], span: null, location: null,
         };
         default: return null;

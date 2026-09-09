@@ -230,8 +230,8 @@ That is the fastest way to see a mis-parse.
 From a terminal, against a scratch database so you never touch real data:
 
 ```
-sched.exe --db C:\Users\user\AppData\Local\Temp\test.db add "<your line>"
-sched.exe --db C:\Users\user\AppData\Local\Temp\test.db export --json
+sched.exe --db %TEMP%\schedule-test.db add "<your line>"
+sched.exe --db %TEMP%\schedule-test.db export --json
 ```
 
 **A failure is when the title still contains something that should have been

@@ -4,11 +4,29 @@ A weekly planner that exists to do the three things paper cannot: keep recurring
 commitments without rewriting them, time work against your estimate, and be in
 your pocket.
 
+![The week and the list, side by side](docs/screenshots/week.png)
+
 Design: [`docs/superpowers/specs/2026-08-29-marwans-schedule-design.md`](docs/superpowers/specs/2026-08-29-marwans-schedule-design.md)
 Parser contract: [`docs/parser-behaviour.md`](docs/parser-behaviour.md) — what it
 should and should not understand, every case verified against the code by
 `python tools/behaviour_check.py`
 Agent instructions: [`AGENT.md`](AGENT.md)
+
+## Two gestures worth knowing
+
+Hovering a day for a second widens it and filters the list to that day. Let go
+and it reverts; click to make it stick.
+
+![Hovering Saturday widens the column and filters the list to it](docs/screenshots/day-peek.png)
+
+Clicking an empty hour opens a box in that slot. What you type goes through the
+same grammar as everywhere else, so `climb ~90m` becomes a ninety-minute block
+at three on Saturday.
+
+![Typing into an empty Saturday afternoon](docs/screenshots/add-in-an-hour.png)
+
+Screenshots are of invented data, produced by
+[`tools/frontend-harness`](tools/frontend-harness) rather than anyone's real week.
 
 ## Layout
 

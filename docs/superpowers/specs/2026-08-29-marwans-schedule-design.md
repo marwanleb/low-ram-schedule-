@@ -436,8 +436,9 @@ Implementation rules for the expansion path:
 
 ### 5.3 Travel between timezones: pinned vs systime
 
-The user moves regularly between **America/Chicago**, **Europe/Paris**, and
-**Asia/Beirut**. This is routine, not an edge case, and it is the reason
+This is written for someone who moves between three zones — the examples below
+use **America/Chicago**, **Europe/Paris** and **Asia/Beirut** — often enough
+that it is routine rather than an edge case. That is the reason
 `recurrence.tz` exists.
 
 #### Two behaviours, both required
