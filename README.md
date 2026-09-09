@@ -10,7 +10,8 @@ Design: [`docs/superpowers/specs/2026-08-29-marwans-schedule-design.md`](docs/su
 Parser contract: [`docs/parser-behaviour.md`](docs/parser-behaviour.md) — what it
 should and should not understand, every case verified against the code by
 `python tools/behaviour_check.py`
-Agent instructions: [`AGENT.md`](AGENT.md)
+Agent instructions: [`AGENT.md`](AGENT.md) — the import format, where run
+files go, and the PowerShell invocations that actually work
 
 ## Two gestures worth knowing
 

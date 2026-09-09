@@ -13,3 +13,7 @@ bot.toml
 
 # The design handoff is kept extracted, next to this; the archive is redundant.
 *.zip
+
+# Agent import runs, if anyone points one at a source checkout. They belong
+# next to the installed binary, not in the repository.
+sched-sync/

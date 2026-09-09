@@ -82,6 +82,72 @@ The batch applies completely or not at all. A record missing `external_id`, or
 carrying an unknown time zone, is refused and **nothing** is written — a
 half-applied import is worse than a failed one, because it looks like it worked.
 
+## Where to put the file, and how to run it
+
+`sched.exe` lives beside the app:
+
+    %USERPROFILE%\marwans-schedule\sched.exe
+
+From a source checkout it is `target\release\sched.exe` instead. Either way,
+import files go in a dated run directory next to the binary:
+
+    sched-sync\runs\<YYYY-MM-DD>\import.json
+
+One directory per sync, named for the date it was produced. A run is then
+something you can look at afterwards, re-apply verbatim, or diff against the
+next one — and because every record carries an `external_id`, re-applying an
+old run is harmless.
+
+### PowerShell
+
+```powershell
+Set-Location "$env:USERPROFILE\marwans-schedule"
+.\sched.exe import sched-sync\runs\2026-09-09\import.json
+```
+
+```
+imported  2 added, 0 updated
+```
+
+Run it again on the same file and it says `0 added, 2 updated`. That is the
+whole point: re-running is safe.
+
+Four things trip agents up on Windows, all of them avoidable:
+
+- **`.\` is required.** PowerShell will not run an executable from the current
+  directory without it. Bare `sched.exe import ...` fails unless the folder is
+  on `PATH`.
+- **`cd /d` is cmd.exe, not PowerShell.** Use `Set-Location`, or plain `cd`.
+- **`&&` does not chain commands in Windows PowerShell 5.1.** Use `;`, or
+  `if ($?) { ... }` when the second should only run if the first succeeded.
+- **Write the JSON without a byte-order mark.** `Set-Content -Encoding utf8`
+  and `Out-File -Encoding utf8` both prepend one in 5.1, and the import is then
+  refused with `expected value at line 1 column 1`, which does not hint at the
+  cause. Write it this way instead:
+
+  ```powershell
+  [System.IO.File]::WriteAllText("$run\import.json", $json)
+  ```
+
+### Rehearse against a scratch store first
+
+`--db` points at any file, so a run can be applied somewhere harmless and
+inspected before it goes near the real store:
+
+```powershell
+$scratch = "$env:TEMP\dry-run.db"
+Remove-Item $scratch -ErrorAction SilentlyContinue
+.\sched.exe --db $scratch import sched-sync\runs\2026-09-09\import.json
+.\sched.exe --db $scratch week
+```
+
+If that reads correctly, run the same command again without `--db`.
+
+### Other shells
+
+In bash or zsh it is `./sched import sched-sync/runs/2026-09-09/import.json`,
+and none of the four traps apply.
+
 ## Commands
 
     sched add "<text>"          capture one line, same syntax as the app
