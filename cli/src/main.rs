@@ -294,7 +294,7 @@ fn main() -> ExitCode {
                 Ok(t) => t,
                 Err(e) => return fail(&format!("could not read {}: {e}", file.display())),
             };
-            let records: Vec<ImportRecord> = match serde_json::from_str(&text) {
+            let records: Vec<ImportRecord> = match serde_json::from_str(strip_bom(&text)) {
                 Ok(r) => r,
                 Err(e) => return fail(&format!("{} is not a valid import file: {e}", file.display())),
             };
@@ -425,4 +425,54 @@ fn week_json(w: &ms_core::Week) -> String {
         r#"{{"anchor":"{}","viewing_tz":"{}","days":[{}],"diagnostics":[{}]}}"#,
         w.anchor, w.viewing_tz, days, diags
     )
+}
+
+/// Drop a leading UTF-8 byte-order mark.
+///
+/// Windows PowerShell 5.1 writes one from both `Set-Content -Encoding utf8`
+/// and `Out-File -Encoding utf8`, which is how an agent on Windows naturally
+/// writes an import file. serde then refuses the document with "expected value
+/// at line 1 column 1" — an error that points at the first character without
+/// saying that the first character is invisible. The mark carries no meaning
+/// in a file we are about to parse as UTF-8, so it is dropped rather than
+/// reported.
+fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_bom;
+    use ms_core::ImportRecord;
+
+    const DOC: &str = r#"[{"external_id":"a","title":"t"}]"#;
+
+    /// The premise for stripping at all. If serde ever accepts a leading mark
+    /// on its own, this fails and the strip becomes dead code.
+    #[test]
+    fn serde_alone_refuses_a_byte_order_mark() {
+        let with_bom = format!("\u{feff}{DOC}");
+        assert!(serde_json::from_str::<Vec<ImportRecord>>(&with_bom).is_err());
+    }
+
+    #[test]
+    fn an_import_written_with_a_byte_order_mark_still_parses() {
+        let with_bom = format!("\u{feff}{DOC}");
+        let recs: Vec<ImportRecord> =
+            serde_json::from_str(strip_bom(&with_bom)).expect("a BOM must not refuse the file");
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0].title, "t");
+    }
+
+    #[test]
+    fn a_document_without_one_is_returned_unchanged() {
+        assert_eq!(strip_bom(DOC), DOC);
+    }
+
+    /// Only a leading mark is a BOM; anywhere else it is content.
+    #[test]
+    fn a_mark_that_is_not_leading_is_left_alone() {
+        let inner = "[\u{feff}]";
+        assert_eq!(strip_bom(inner), inner);
+    }
 }

@@ -112,7 +112,7 @@ imported  2 added, 0 updated
 Run it again on the same file and it says `0 added, 2 updated`. That is the
 whole point: re-running is safe.
 
-Four things trip agents up on Windows, all of them avoidable:
+Three things trip agents up on Windows:
 
 - **`.\` is required.** PowerShell will not run an executable from the current
   directory without it. Bare `sched.exe import ...` fails unless the folder is
@@ -120,14 +120,12 @@ Four things trip agents up on Windows, all of them avoidable:
 - **`cd /d` is cmd.exe, not PowerShell.** Use `Set-Location`, or plain `cd`.
 - **`&&` does not chain commands in Windows PowerShell 5.1.** Use `;`, or
   `if ($?) { ... }` when the second should only run if the first succeeded.
-- **Write the JSON without a byte-order mark.** `Set-Content -Encoding utf8`
-  and `Out-File -Encoding utf8` both prepend one in 5.1, and the import is then
-  refused with `expected value at line 1 column 1`, which does not hint at the
-  cause. Write it this way instead:
 
-  ```powershell
-  [System.IO.File]::WriteAllText("$run\import.json", $json)
-  ```
+A byte-order mark is **not** one of them, though it was until recently. Both
+`Set-Content -Encoding utf8` and `Out-File -Encoding utf8` write one in
+PowerShell 5.1, and the import used to be refused with `expected value at line
+1 column 1` — an error pointing at a character you cannot see. `sched import`
+now strips it, so write the file whichever way is convenient.
 
 ### Rehearse against a scratch store first
 
