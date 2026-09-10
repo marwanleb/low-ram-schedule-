@@ -408,6 +408,21 @@ pub fn add_placement(
     starts_at: &str,
     ends_at: &str,
 ) -> Result<String, String> {
+    add_placement_as(db, item_id, starts_at, ends_at, None)
+}
+
+/// Place a block, recording where it came from.
+///
+/// `moved_from` set means this block replaces one occurrence of a recurrence:
+/// the rule still owns every other week, and restoring that date has to remove
+/// this row or the same thing appears twice.
+pub fn add_placement_as(
+    db: &Db,
+    item_id: &str,
+    starts_at: &str,
+    ends_at: &str,
+    moved_from: Option<NaiveDate>,
+) -> Result<String, String> {
     let (Ok(s), Ok(e)) = (
         DateTime::parse_from_rfc3339(starts_at),
         DateTime::parse_from_rfc3339(ends_at),
@@ -418,11 +433,19 @@ pub fn add_placement(
         return Err("a block must end after it starts".into());
     }
     let id = format!("plc_{}", uuid::Uuid::new_v4().simple());
+    let origin = if moved_from.is_some() { "moved" } else { "oneoff" };
     db.conn
         .execute(
-            "INSERT INTO placements (id, item_id, starts_at, ends_at, origin)
-             VALUES (?1, ?2, ?3, ?4, 'oneoff')",
-            rusqlite::params![id, item_id, starts_at, ends_at],
+            "INSERT INTO placements (id, item_id, starts_at, ends_at, origin, moved_from)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                id,
+                item_id,
+                starts_at,
+                ends_at,
+                origin,
+                moved_from.map(|d| d.format("%Y-%m-%d").to_string())
+            ],
         )
         .map_err(|e| e.to_string())?;
     Ok(id)
@@ -496,4 +519,93 @@ pub fn set_setting(db: &Db, key: &str, value: &str) -> rusqlite::Result<()> {
         rusqlite::params![key, value],
     )?;
     Ok(())
+}
+
+/* ── one occurrence of a repeat ──────────────────────────────────────── */
+
+/// Read the dates a rule has been told to skip.
+fn exceptions(db: &Db, item_id: &str) -> Result<Vec<String>, String> {
+    let existing: String = db
+        .conn
+        .query_row(
+            "SELECT except_on FROM recurrence WHERE item_id = ?1",
+            rusqlite::params![item_id],
+            |r| r.get(0),
+        )
+        .map_err(|_| "that item does not repeat".to_string())?;
+    Ok(existing
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+fn write_exceptions(db: &Db, item_id: &str, dates: &[String]) -> Result<(), String> {
+    db.conn
+        .execute(
+            "UPDATE recurrence SET except_on = ?2 WHERE item_id = ?1",
+            rusqlite::params![item_id, dates.join(",")],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Cancel one date of a repeat, leaving the series alone.
+pub fn except(db: &Db, item_id: &str, date: NaiveDate) -> Result<(), String> {
+    let key = date.format("%Y-%m-%d").to_string();
+    let mut dates = exceptions(db, item_id)?;
+    if !dates.contains(&key) {
+        dates.push(key);
+    }
+    write_exceptions(db, item_id, &dates)
+}
+
+/// Put a cancelled date back, and remove anything that was moved out of it.
+///
+/// Without that second half, restoring a date you had dragged elsewhere brings
+/// the generated occurrence back while the moved copy is still sitting there,
+/// and the same class appears twice on the same week.
+pub fn restore_occurrence(db: &Db, item_id: &str, date: NaiveDate) -> Result<(), String> {
+    let key = date.format("%Y-%m-%d").to_string();
+    let kept: Vec<String> = exceptions(db, item_id)?.into_iter().filter(|d| *d != key).collect();
+    write_exceptions(db, item_id, &kept)?;
+    db.conn
+        .execute(
+            "DELETE FROM placements WHERE item_id = ?1 AND origin = 'moved' AND moved_from = ?2",
+            rusqlite::params![item_id, key],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Move one occurrence of a repeat to a new time, leaving every other week
+/// where it was.
+///
+/// Two writes — an exception on that date, and a real block at the new time —
+/// in one transaction. A half-move would take the occurrence off the week
+/// without putting it anywhere else, which is worse than refusing.
+pub fn move_occurrence(
+    db: &Db,
+    item_id: &str,
+    from: NaiveDate,
+    starts_at: &str,
+    ends_at: &str,
+) -> Result<String, String> {
+    // Fails here if the item has no rule, before anything is written.
+    exceptions(db, item_id)?;
+
+    let tx = db.conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let key = from.format("%Y-%m-%d").to_string();
+    // Dragging the same occurrence a second time replaces the first move
+    // rather than stacking another block on the day.
+    tx.execute(
+        "DELETE FROM placements WHERE item_id = ?1 AND origin = 'moved' AND moved_from = ?2",
+        rusqlite::params![item_id, key],
+    )
+    .map_err(|e| e.to_string())?;
+    except(db, item_id, from)?;
+    let id = add_placement_as(db, item_id, starts_at, ends_at, Some(from))?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(id)
 }

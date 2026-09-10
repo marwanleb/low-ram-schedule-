@@ -55,7 +55,52 @@
       <div id="buckets" class="buckets"></div>
       <form id="addForm" class="addRow" autocomplete="off">
         <input id="addInput" type="text" placeholder="+ add — try: math hw fri ~2h #math   (type help)" />
+        <button id="formToggle" type="button" class="formToggle" title="fill in fields instead">&#9662;</button>
       </form>
+
+      <!-- Fields compose a line of the same grammar; nothing here is a second
+           way into the store. The preview shows the sentence being built. -->
+      <div id="addFields" class="addFields" hidden>
+        <label class="ff"><span>TITLE</span>
+          <input id="ffTitle" type="text" placeholder="what is it" /></label>
+
+        <div class="ffRow">
+          <label class="ff"><span>DATE</span>
+            <input id="ffDate" type="date" /></label>
+          <label class="ff"><span>TIME</span>
+            <input id="ffTime" type="time" /></label>
+          <label class="ff"><span>UNTIL</span>
+            <input id="ffEnd" type="time" /></label>
+        </div>
+
+        <div class="ffRow">
+          <label class="ff"><span>HOW LONG</span>
+            <input id="ffEst" type="text" inputmode="numeric" placeholder="90m / 2h" /></label>
+          <label class="ff"><span>TAG</span>
+            <input id="ffTag" type="text" placeholder="math" /></label>
+          <label class="ff"><span>PLACE</span>
+            <input id="ffPlace" type="text" placeholder="Hall 2.106" /></label>
+        </div>
+
+        <div class="ffRow">
+          <div class="ff"><span>KIND</span>
+            <div class="ffSeg" id="ffKind">
+              <button type="button" data-kind="task" class="on">task</button>
+              <button type="button" data-kind="block">block</button>
+            </div>
+          </div>
+          <div class="ff"><span>REPEATS</span>
+            <div class="ffDays" id="ffDays"></div>
+          </div>
+          <label class="ff ffCheck"><span>!!</span>
+            <input id="ffPriority" type="checkbox" /></label>
+        </div>
+
+        <div class="ffFoot">
+          <code id="ffPreview" class="ffPreview">—</code>
+          <button id="ffAdd" type="button" class="btn wide">add</button>
+        </div>
+      </div>
       <div id="addEcho" class="addEcho" hidden></div>
       <div id="footHint" class="footHint">
         <span id="statsLine">—</span>

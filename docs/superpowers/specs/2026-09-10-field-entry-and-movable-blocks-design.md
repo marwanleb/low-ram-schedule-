@@ -97,7 +97,17 @@ Series-wide edits stay in the popover. Dragging never changes a rule.
 
 `Pending` becomes a small state machine:
 
-    Filling { draft: Fields, step: Date | Time | Length }
+    Filling { text: String, asked: Date | Time | Length, skipped: [..] }
+
+**Built with text rather than `Fields`, which is a change from the plan above.**
+Each answer is appended to the draft and the whole line re-read, so the draft is
+always a valid capture and there is still exactly one parser. It also buys
+something `Fields` would not: an answer that says more than was asked — "friday
+9am" at the *when* prompt — fills both and the time question is simply not
+asked. `compose` remains what the form uses.
+
+A repeat is never asked how long. Its length belongs to the rule, which the app
+edits, and `trash every tue 20:00` is a finished thought already.
 
 It asks only for what the line did not supply, in that order. `-` or `skip`
 advances; `cancel` abandons the draft. A complete line asks nothing, so the

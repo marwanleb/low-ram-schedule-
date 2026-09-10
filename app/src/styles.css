@@ -346,6 +346,34 @@ body.todoFocus #todoPane { flex-basis: 62%; }
   align-items: center;
 }
 .ev.done .t { color: var(--dimmer); text-decoration: line-through; }
+/* A resize handle with a taller hit area than it looks: a 30-minute block is
+   about 18px tall, so a hairline edge is not a target you can hit. */
+.evGrip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 9px;
+  cursor: ns-resize;
+}
+.evGrip::after {
+  content: "";
+  position: absolute;
+  left: 30%;
+  right: 30%;
+  bottom: 3px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ev:hover .evGrip::after { opacity: 0.5; }
+.ev.dragging {
+  z-index: 60;
+  opacity: 0.85;
+  box-shadow: 0 0 0 1px var(--gold), 0 6px 18px rgba(0, 0, 0, 0.5);
+  transition: none;
+}
 .ev .zone {
   font-family: Silkscreen, monospace;
   font-size: 8px;
@@ -448,6 +476,107 @@ body.todoFocus #todoPane { flex-basis: 62%; }
   outline: none;
 }
 .addRow input::placeholder { color: var(--faint); }
+
+/* ── the field form ─────────────────────────────────────────────────── */
+/* Opens under the capture box rather than replacing it: the line you type is
+   still the fast path, and this is the one you open when you cannot remember
+   whether it is ~2h or 2h~. */
+.addRow { display: flex; align-items: stretch; gap: 8px; }
+.addRow input { flex: 1; min-width: 0; }
+.formToggle {
+  flex: none;
+  width: 34px;
+  background: transparent;
+  border: 2px dashed var(--line-dash);
+  color: var(--dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, transform 0.2s;
+}
+.formToggle:hover { color: var(--text-2); border-color: var(--line-box); }
+.formToggle.open { color: var(--gold); border-color: var(--gold); border-style: solid; transform: rotate(180deg); }
+
+.addFields {
+  flex: none;
+  padding: 4px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ffRow { display: flex; gap: 9px; align-items: flex-end; }
+.ff { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.ff > span {
+  font-family: Silkscreen, Inconsolata, monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--dimmer);
+}
+.ff input[type="text"], .ff input[type="date"], .ff input[type="time"] {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  background: var(--row);
+  border: 2px solid var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.ff input:focus { border-color: var(--gold); }
+.ff input:disabled { opacity: 0.35; cursor: not-allowed; }
+.ff input::placeholder { color: var(--faint); }
+/* The native pickers render light by default and would glare against this. */
+.ff input[type="date"]::-webkit-calendar-picker-indicator,
+.ff input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+.ffCheck { flex: 0 0 auto; align-items: center; }
+.ffCheck input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+.ffSeg { display: flex; }
+.ffSeg button {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--row);
+  border: 2px solid var(--line);
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ffSeg button + button { border-left: none; }
+.ffSeg button.on { color: var(--page); background: var(--gold); border-color: var(--gold); }
+
+.ffDays { display: flex; gap: 3px; }
+.ffDays button {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--row);
+  border: 2px solid var(--line);
+  color: var(--dim);
+  font-family: Silkscreen, Inconsolata, monospace;
+  font-size: 8px;
+  cursor: pointer;
+}
+.ffDays button.on { color: var(--page); background: var(--cyan); border-color: var(--cyan); }
+
+.ffFoot { display: flex; align-items: center; gap: 10px; }
+.ffPreview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 7px 9px;
+  background: var(--subbar);
+  border-left: 3px solid var(--gold);
+  color: var(--text-2);
+  font-family: Inconsolata, monospace;
+  font-size: 12px;
+}
+.ffPreview.empty { color: var(--faint); border-left-color: var(--line); }
+
 .addRow input:focus { border-color: var(--line-box); border-style: solid; }
 
 .footHint {

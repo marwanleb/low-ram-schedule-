@@ -4,8 +4,9 @@
 use chrono::{Local, NaiveDate, Utc};
 use ms_core::{
     active_session, add_from_text, add_placement, delete_item, delete_placement, get_items,
-    get_week, help_text, move_placement, set_done, set_recurrence_tz, stats, store,
-    set_estimate, set_listed, sweep_stale_sessions, timer_start, timer_stop, Db, Filter,
+    get_week, help_text, move_occurrence, move_placement, restore_occurrence, set_done,
+    set_recurrence_tz, stats, store, set_estimate, set_listed, sweep_stale_sessions, timer_start,
+    timer_stop, Db, Filter,
 };
 use serde::Serialize;
 use std::sync::Mutex;
@@ -247,30 +248,8 @@ fn cmd_delete(state: State<'_, AppDb>, id: String) -> Result<(), String> {
 #[tauri::command]
 fn cmd_except(state: State<'_, AppDb>, id: String, date: String) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    let existing: String = db
-        .conn
-        .query_row(
-            "SELECT except_on FROM recurrence WHERE item_id = ?1",
-            rusqlite::params![id],
-            |r| r.get(0),
-        )
-        .map_err(|_| "that item does not repeat".to_string())?;
-    let mut dates: Vec<String> = existing
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect();
-    if !dates.contains(&date) {
-        dates.push(date);
-    }
-    db.conn
-        .execute(
-            "UPDATE recurrence SET except_on = ?2 WHERE item_id = ?1",
-            rusqlite::params![id, dates.join(",")],
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    let on = NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    ms_core::except(&db, &id, on)
 }
 
 #[derive(Serialize)]
@@ -489,26 +468,32 @@ fn cmd_set_recurrence_tz(
 #[tauri::command]
 fn cmd_remove_except(state: State<'_, AppDb>, item_id: String, date: String) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    let existing: String = db
-        .conn
-        .query_row(
-            "SELECT except_on FROM recurrence WHERE item_id = ?1",
-            rusqlite::params![item_id],
-            |r| r.get(0),
-        )
-        .map_err(|_| "that item does not repeat".to_string())?;
-    let kept: Vec<&str> = existing
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty() && *s != date)
-        .collect();
-    db.conn
-        .execute(
-            "UPDATE recurrence SET except_on = ?2 WHERE item_id = ?1",
-            rusqlite::params![item_id, kept.join(",")],
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    let on = NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    // Also drops anything moved out of that date, or the class comes back
+    // while the copy you dragged elsewhere is still sitting there.
+    restore_occurrence(&db, &item_id, on)
+}
+
+/// Move one occurrence of a repeat. The series is untouched; every other week
+/// still comes from the rule.
+#[tauri::command]
+fn cmd_move_occurrence(
+    state: State<'_, AppDb>,
+    item_id: String,
+    date: String,
+    starts_at: String,
+    ends_at: String,
+) -> Result<String, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    let from = NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    move_occurrence(&db, &item_id, from, &starts_at, &ends_at)
+}
+
+/// Render fields as a line of the capture grammar, so the form can show what
+/// it is about to submit. The same function the Telegram ladder uses.
+#[tauri::command]
+fn cmd_compose(fields: ms_core::Fields) -> String {
+    ms_core::line(&fields)
 }
 
 /// Zones offered in the picker: where you are now, plus the ones already in
@@ -713,6 +698,8 @@ pub fn run() {
             cmd_set_recurrence,
             cmd_set_recurrence_tz,
             cmd_remove_except,
+            cmd_move_occurrence,
+            cmd_compose,
             cmd_zones,
             cmd_set_estimate,
             cmd_set_listed,

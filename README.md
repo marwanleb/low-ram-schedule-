@@ -13,6 +13,16 @@ should and should not understand, every case verified against the code by
 Agent instructions: [`AGENT.md`](AGENT.md) — the import format, where run
 files go, and the PowerShell invocations that actually work
 
+## Adding things
+
+Type a line and it is parsed. If you cannot remember the syntax, the `⌄` beside
+the capture box opens fields instead — and shows you the line they compose, so
+you need it less each time. Both go through the same parser; the form has no
+private path into the store.
+
+The Telegram bot asks for whatever you left out, one thing at a time, and `-`
+skips any of it. A complete line is never questioned.
+
 ## Two gestures worth knowing
 
 Hovering a day for a second widens it and filters the list to that day. Let go
@@ -23,6 +33,11 @@ and it reverts; click to make it stick.
 Clicking an empty hour opens a box in that slot. What you type goes through the
 same grammar as everywhere else, so `climb ~90m` becomes a ninety-minute block
 at three on Saturday.
+
+Blocks already on the week can be dragged to another time or day, and pulled
+longer or shorter by their bottom edge. Dragging one occurrence of a repeating
+class moves **only that week** — the series is left alone, and restoring the
+date removes the moved copy so the class never appears twice.
 
 ![Typing into an empty Saturday afternoon](docs/screenshots/add-in-an-hour.png)
 

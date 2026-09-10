@@ -140,19 +140,81 @@ fn fmt_mins(m: u32) -> String {
 /// held back and confirmed rather than filed silently. Lives in memory only:
 /// if the bot restarts mid-question the pending line is lost, which is why it
 /// is echoed back in the question itself.
+/// What a half-finished capture is still missing, in the order it is asked for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Slot {
+    Date,
+    Time,
+    Length,
+}
+
+impl Slot {
+    fn question(self) -> &'static str {
+        match self {
+            Slot::Date => "when? (a date, or - to skip)",
+            Slot::Time => "what time? (- to skip)",
+            Slot::Length => "how long? (- to skip)",
+        }
+    }
+}
+
 enum Pending {
-    /// Asked whether an undated capture was meant that way.
-    Confirm(String),
-    /// They said no, so the next message should supply a date.
-    AwaitingDate(String),
+    /// A capture being completed one answer at a time.
+    ///
+    /// `text` is always a valid line of the grammar: each answer is appended
+    /// and the whole thing re-read, so there is no second parser and an answer
+    /// that supplies more than was asked ("friday 9am") simply fills both.
+    Filling { text: String, asked: Slot, skipped: Vec<Slot> },
 }
 
-fn is_yes(t: &str) -> bool {
-    matches!(t, "y" | "yes" | "yeah" | "yep" | "ok" | "sure")
+fn is_skip(t: &str) -> bool {
+    matches!(t, "-" | "skip" | "none" | "no")
 }
 
-fn is_no(t: &str) -> bool {
-    matches!(t, "n" | "no" | "nope")
+fn is_cancel(t: &str) -> bool {
+    matches!(t, "cancel" | "stop" | "forget it")
+}
+
+/// The next thing worth asking about, or None when there is nothing left.
+///
+/// A repeat has no single date, and a time range already says both when it
+/// starts and how long it runs, so neither is asked for again.
+fn next_slot(p: &ms_core::Parsed, skipped: &[Slot]) -> Option<Slot> {
+    let want = |s: Slot| !skipped.contains(&s);
+    if p.due.is_none() && !p.repeats && want(Slot::Date) {
+        return Some(Slot::Date);
+    }
+    if p.at.is_none() && p.span.is_none() && want(Slot::Time) {
+        return Some(Slot::Time);
+    }
+    // Not for a repeat: its length belongs to the rule, which the app edits,
+    // and "trash every tue 20:00" is a finished thought already.
+    if p.estimate_min.is_none() && p.span.is_none() && !p.repeats && want(Slot::Length) {
+        return Some(Slot::Length);
+    }
+    None
+}
+
+/// Did the answer actually supply the thing that was asked for?
+fn slot_filled(p: &ms_core::Parsed, slot: Slot) -> bool {
+    match slot {
+        Slot::Date => p.due.is_some() || p.repeats,
+        Slot::Time => p.at.is_some() || p.span.is_some(),
+        Slot::Length => p.estimate_min.is_some() || p.span.is_some(),
+    }
+}
+
+/// Ask the next question, or file it if there is nothing left to ask.
+fn advance(db: &Db, text: String, skipped: Vec<Slot>, pending: &mut Option<Pending>) -> String {
+    let p = ms_core::parse(&text, Local::now().date_naive());
+    match next_slot(&p, &skipped) {
+        Some(slot) => {
+            let q = slot.question();
+            *pending = Some(Pending::Filling { text, asked: slot, skipped });
+            q.to_string()
+        }
+        None => commit(db, &text, "added"),
+    }
 }
 
 /// Handle a message, carrying whatever this chat was asked last.
@@ -160,33 +222,33 @@ fn handle_with_state(db: &Db, text: &str, pending: &mut Option<Pending>) -> Stri
     let trimmed = text.trim().to_ascii_lowercase();
 
     match pending.take() {
-        Some(Pending::Confirm(original)) if is_yes(&trimmed) => {
-            return commit(db, &original, "added");
-        }
-        Some(Pending::Confirm(original)) if is_no(&trimmed) => {
-            *pending = Some(Pending::AwaitingDate(original));
-            return "when is it due? (send a date, or anything else to start over)".into();
-        }
-        Some(Pending::Confirm(original)) => {
-            // Neither yes nor no: they have moved on. Keep the original rather
-            // than discard something they typed, and carry on with the new
-            // message.
-            let kept = commit(db, &original, "kept undated");
-            return format!("{kept}
-
-{}", handle_with_state(db, text, pending));
-        }
-        Some(Pending::AwaitingDate(original)) => {
-            // Their answer is a date fragment; glue it on and re-read the whole
-            // line, so the same grammar applies.
-            let combined = format!("{original} {}", text.trim());
-            let reparsed = ms_core::parse(&combined, Local::now().date_naive());
-            if reparsed.due.is_some() {
-                return commit(db, &combined, "added");
+        Some(Pending::Filling { text: draft, asked, mut skipped }) => {
+            if is_cancel(&trimmed) {
+                return format!("dropped: {}", ms_core::parse(&draft, Local::now().date_naive()).title);
             }
-            // Not a date. Never lose the capture: file it as it was and treat
-            // this message as a new one.
-            let kept = commit(db, &original, "kept undated — that did not read as a date");
+            if is_skip(&trimmed) {
+                skipped.push(asked);
+                return advance(db, draft, skipped, pending);
+            }
+
+            // A length needs its marker; the other answers are grammar already.
+            let answer = text.trim();
+            let addition = if asked == Slot::Length && !answer.starts_with('~') {
+                format!("~{answer}")
+            } else {
+                answer.to_string()
+            };
+            let combined = format!("{draft} {addition}");
+            let reparsed = ms_core::parse(&combined, Local::now().date_naive());
+
+            if slot_filled(&reparsed, asked) {
+                skipped.push(asked);
+                return advance(db, combined, skipped, pending);
+            }
+
+            // Not an answer to the question. Never lose either message: file
+            // what was already there, and read this one as a fresh capture.
+            let kept = commit(db, &draft, "filed as it was");
             return format!("{kept}
 
 {}", handle_with_state(db, text, pending));
@@ -196,16 +258,11 @@ fn handle_with_state(db: &Db, text: &str, pending: &mut Option<Pending>) -> Stri
 
     let today = Local::now().date_naive();
     if let Command::Capture(p) = interpret(text, today) {
-        // Only ask about a plain undated to-do. A repeat, a scheduled block or
-        // anything with a date is already pinned to a time.
-        let undated = p.due.is_none() && !p.repeats && !p.scheduled && !p.title.trim().is_empty();
-        if undated {
-            *pending = Some(Pending::Confirm(text.to_string()));
-            return format!(
-                "no date on \"{}\" — is that right?
-(y to file it as is, n to give it a date)",
-                p.title
-            );
+        // Ask for whatever the line did not say, one thing at a time. A
+        // complete line asks nothing, so this is the price of being terse
+        // rather than a tax on every capture.
+        if !p.title.trim().is_empty() && next_slot(&p, &[]).is_some() {
+            return advance(db, text.to_string(), Vec::new(), pending);
         }
     }
 
@@ -478,5 +535,118 @@ fn main() {
             }
             send(&token, chat_id, &reply);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{handle_with_state, Pending};
+    use ms_core::{get_items, Db, Filter};
+
+    /// Drive a whole exchange, returning what the bot said each time. The state
+    /// is threaded exactly as `main` threads it, so these are real conversations.
+    fn talk(db: &Db, lines: &[&str]) -> Vec<String> {
+        let mut pending: Option<Pending> = None;
+        lines.iter().map(|l| handle_with_state(db, l, &mut pending)).collect()
+    }
+
+    fn titles(db: &Db) -> Vec<String> {
+        get_items(db, &Filter::default()).into_iter().map(|i| i.title).collect()
+    }
+
+    #[test]
+    fn a_complete_line_is_never_questioned() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["gym fri 6am ~1h"]);
+        assert!(said[0].starts_with("added"), "asked something it did not need to: {said:?}");
+        assert_eq!(titles(&db), vec!["gym"]);
+    }
+
+    #[test]
+    fn a_bare_title_is_asked_for_each_missing_thing_in_turn() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["dentist", "friday", "9am", "30m"]);
+        assert!(said[0].contains("when"), "first question: {:?}", said[0]);
+        assert!(said[1].contains("time"), "second question: {:?}", said[1]);
+        assert!(said[2].contains("how long"), "third question: {:?}", said[2]);
+        assert!(said[3].starts_with("added"), "then files it: {:?}", said[3]);
+
+        let items = get_items(&db, &Filter::default());
+        assert_eq!(items.len(), 1, "one item, not one per answer");
+        assert_eq!(items[0].title, "dentist");
+        assert_eq!(items[0].estimate_min, Some(30));
+        assert!(items[0].due_at.is_some(), "the date answer stuck");
+    }
+
+    #[test]
+    fn an_answer_that_says_more_than_was_asked_skips_ahead() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["dentist", "friday 9am"]);
+        assert!(said[0].contains("when"));
+        // Time came with the date, so the next question is length, not time.
+        assert!(said[1].contains("how long"), "should have skipped the time: {:?}", said[1]);
+    }
+
+    #[test]
+    fn skipping_moves_on_and_never_asks_twice() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["renew parking", "-", "-", "-"]);
+        assert!(said[0].contains("when"));
+        assert!(said[1].contains("time"));
+        assert!(said[2].contains("how long"));
+        assert!(said[3].starts_with("added"), "skipping everything still files it: {:?}", said[3]);
+        assert_eq!(titles(&db), vec!["renew parking"]);
+    }
+
+    #[test]
+    fn cancel_drops_the_draft_and_writes_nothing() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["dentist", "cancel"]);
+        assert!(said[1].starts_with("dropped"), "{:?}", said[1]);
+        assert!(titles(&db).is_empty(), "nothing should have been written");
+    }
+
+    /// The promise that matters: an answer the bot cannot read must not lose
+    /// the thing being captured.
+    #[test]
+    fn an_unreadable_answer_files_the_draft_rather_than_losing_it() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["dentist", "sometime soonish"]);
+        assert!(said[1].contains("filed as it was"), "{:?}", said[1]);
+        assert!(titles(&db).contains(&"dentist".to_string()), "the draft survived");
+    }
+
+    /// An answer that happens to read as a date is taken as one, even if it
+    /// looks like a fresh thought. Pinned deliberately: at a "when?" prompt
+    /// the reading is reasonable, and the alternative is guessing at intent.
+    #[test]
+    fn an_answer_containing_a_date_is_treated_as_the_answer() {
+        let db = Db::open_in_memory().unwrap();
+        talk(&db, &["dentist", "buy milk tomorrow", "-", "-"]);
+        let all = titles(&db);
+        assert_eq!(all.len(), 1, "it merges rather than splitting: {all:?}");
+        assert!(all[0].starts_with("dentist"), "{all:?}");
+    }
+
+    #[test]
+    fn a_repeat_is_never_asked_for_a_date() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["trash every tue 20:00"]);
+        assert!(said[0].starts_with("added"), "a repeat needs nothing else: {:?}", said[0]);
+    }
+
+    #[test]
+    fn a_time_range_answers_both_time_and_length() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["seminar", "friday", "14:00-15:30"]);
+        assert!(said[2].starts_with("added"), "a range needs no length question: {:?}", said[2]);
+    }
+
+    #[test]
+    fn commands_still_work_and_do_not_start_a_ladder() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["help", "list"]);
+        assert!(said[0].contains("Type what you want"), "{:?}", said[0]);
+        assert!(!said[1].contains("when?"), "list is not a capture: {:?}", said[1]);
     }
 }

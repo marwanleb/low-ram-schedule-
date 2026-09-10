@@ -216,8 +216,10 @@ Commands:
   week          this week's schedule
   done: <text>  tick off the first task matching <text>
 
-A line with no date is read back to you before it is filed, so something
-sent in a hurry does not quietly become a task with no when.
+Leave things out and you are asked for them one at a time — when, what
+time, how long — and `-` skips any of them. A complete line is never
+questioned, so the asking is the price of being terse rather than a tax
+on every capture. Send `cancel` to drop a half-finished one.
 
 Ten minutes before anything on the week starts, or anything in the list
 falls due, this chat gets a reminder. Nothing to switch on — it pushes to

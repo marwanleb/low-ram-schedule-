@@ -22,9 +22,21 @@ const at = (offset, hhmm) => `${iso(offset)}T${hhmm}:00-05:00`;
 let seq = 0;
 const uid = (p) => `${p}_${(++seq).toString().padStart(4, "0")}`;
 
+/** Every block belongs to an item; the popover looks it up by id. */
+const blockItems = [];
+function itemFor(id, title, category, place, recurs, estimate_min) {
+  blockItems.push({
+    id, title, tags: [], category, location: place,
+    listed: false, due_at: null, estimate_min, recurs,
+    done: false, done_on: [], completed_at: null,
+    source: "self", external_id: null, spent_sec: 0,
+  });
+  return id;
+}
+
 /** A class: the same item placed on several days. */
 function course(title, days, start, end, place, category) {
-  const id = uid("itm");
+  const id = itemFor(uid("itm"), title, category, place, true, null);
   return days.map((d) => ({
     id: `plc_${iso(d)}_${id}`,
     item_id: id,
@@ -42,7 +54,7 @@ function course(title, days, start, end, place, category) {
 }
 
 function oneOff(title, day, start, end, place, category, done = false) {
-  const id = uid("itm");
+  const id = itemFor(uid("itm"), title, category, place, false, null);
   return [{
     id: uid("plc"),
     item_id: id,
@@ -99,7 +111,7 @@ function todo(title, dueOffset, dueTime, opts = {}) {
 }
 
 // "Today" in these screenshots is Tuesday 8 September.
-const items = EMPTY ? [] : [
+const todos = EMPTY ? [] : [
   todo("PHYS201 problem set 4", 1, "23:59", { estimate_min: 120, category: "work", spent_sec: 2700 }),
   todo("pay the phone bill", 1, "18:00", { category: "life" }),
   todo("email the lab about lost keys", 1, "17:00", { estimate_min: 15, category: "work", done: true }),
@@ -113,11 +125,14 @@ const items = EMPTY ? [] : [
   todo("fix the bike", null, null, { estimate_min: 90, category: "body" }),
   todo("start the reading list", null, null, {}),
 ];
+// Blocks first so their ids resolve; they are listed:false and stay out of the
+// to-do pane.
+const items = EMPTY ? [] : [...blockItems, ...todos];
 
 const session = EMPTY ? null : {
   id: "ses_0001",
-  item_id: items[0].id,
-  title: items[0].title,
+  item_id: todos[0].id,
+  title: todos[0].title,
   started_at: new Date(Date.now() - 45 * 60000).toISOString(),
   estimate_min: 120,
   spent_sec: 2700,
@@ -135,6 +150,31 @@ window.__TAURI__ = {
         case "cmd_active_session": return session;
         case "cmd_stats": return EMPTY ? { phrase: null, n: 0 } : { phrase: "about a third longer", n: 18 };
         case "cmd_data_version": return 1;
+        // A rough stand-in for core::compose::line, enough to see the preview
+        // assemble. The real one is Rust and round-trip tested against parse.
+        case "cmd_compose": {
+          const f = args.fields;
+          const bits = [];
+          if (f.priority) bits.push("!!");
+          bits.push(f.title);
+          if (f.repeat && f.repeat.length) bits.push("every " + f.repeat.join(" "));
+          else if (f.date) bits.push(f.kind === "block" ? "on" : "due");
+          if (f.date && !(f.repeat && f.repeat.length)) {
+            const [y, m, d] = f.date.split("-");
+            bits.push(`${d}/${m}/${y}`);
+          }
+          if (f.at) bits.push(f.span_end ? `${f.at}-${f.span_end}` : f.at);
+          if (f.estimate_min) {
+            bits.push(f.estimate_min % 60 === 0 && f.estimate_min >= 60
+              ? `~${f.estimate_min / 60}h` : `~${f.estimate_min}m`);
+          }
+          if (f.tag) bits.push("#" + f.tag);
+          if (f.place) bits.push("@" + f.place);
+          return bits.join(" ");
+        }
+        case "cmd_move_placement":
+        case "cmd_move_occurrence":
+          return "plc_stub";
         case "cmd_help": return "run `sched help` for the real thing";
         case "cmd_add": return {
           item: { ...todo(args.text, null, null, {}), id: "itm_new" },

@@ -272,7 +272,16 @@ function renderWeek() {
         evt.stopPropagation();
         toggleTimer(p.item_id, p.id);
       };
-      ev.title = "click to edit · double-click to time it";
+      ev.title = p.recurs
+        ? "click to edit · drag to move just this week · double-click to time it"
+        : "click to edit · drag to move · drag the bottom edge to resize";
+
+      const grip = document.createElement("div");
+      grip.className = "evGrip";
+      grip.title = "drag to change how long";
+      ev.appendChild(grip);
+
+      makeBlockDraggable(ev, grip, p, day.date, offsets, hours, heightOf);
       col.appendChild(ev);
     }
 
@@ -528,6 +537,143 @@ $("addForm").onsubmit = async (e) => {
   showEcho(res);
 };
 
+/* ── the field form ─────────────────────────────────────────────────── */
+/* Fields are rendered into a line of the ordinary grammar by core, and that
+   line goes through cmd_add like anything typed. The form has no privileged
+   path into the store, and it shows you the sentence it is building — which is
+   how you stop needing it. */
+
+const DAY_CODES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const form = {
+  kind: "task",
+  days: new Set(),
+};
+
+function buildDayButtons() {
+  const wrap = $("ffDays");
+  for (const code of DAY_CODES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = code[0].toUpperCase();
+    b.title = code;
+    b.onclick = () => {
+      form.days.has(code) ? form.days.delete(code) : form.days.add(code);
+      b.classList.toggle("on", form.days.has(code));
+      refreshPreview();
+    };
+    wrap.appendChild(b);
+  }
+}
+
+/** "90m", "2h", "1.5h" or a bare number of minutes. Anything else is nothing,
+ *  rather than a guess. */
+function readEstimate(raw) {
+  const s = raw.trim().toLowerCase().replace(/^~/, "");
+  if (!s) return null;
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)?$/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!isFinite(n) || n <= 0) return null;
+  const mins = /^h/.test(m[2] || "m") ? Math.round(n * 60) : Math.round(n);
+  return mins > 0 ? mins : null;
+}
+
+function readFields() {
+  const time = $("ffTime").value || null;
+  const end = $("ffEnd").value || null;
+  return {
+    title: $("ffTitle").value.trim(),
+    priority: $("ffPriority").checked,
+    repeat: DAY_CODES.filter((d) => form.days.has(d)),
+    kind: form.kind,
+    date: $("ffDate").value || null,
+    at: time,
+    // An end without a start is not a range; the parser would read it as a
+    // lone time and the round trip would not hold.
+    span_end: time ? end : null,
+    estimate_min: readEstimate($("ffEst").value),
+    tag: $("ffTag").value.trim() || null,
+    place: $("ffPlace").value.trim() || null,
+  };
+}
+
+let previewLine = "";
+async function refreshPreview() {
+  const f = readFields();
+  // A repeat has no single date. Say so by greying the field rather than
+  // letting someone fill in a date the grammar will drop.
+  const repeating = f.repeat.length > 0;
+  $("ffDate").disabled = repeating;
+  $("ffDate").title = repeating ? "a repeat has no single date" : "";
+
+  if (!f.title) {
+    previewLine = "";
+    const box = $("ffPreview");
+    box.textContent = "give it a title";
+    box.classList.add("empty");
+    return;
+  }
+  try {
+    previewLine = await invoke("cmd_compose", { fields: f });
+    const box = $("ffPreview");
+    box.textContent = previewLine;
+    box.classList.remove("empty");
+  } catch (err) {
+    showError(String(err));
+  }
+}
+
+async function submitFields() {
+  if (!previewLine) return;
+  const res = await invoke("cmd_add", { text: previewLine });
+  for (const id of ["ffTitle", "ffDate", "ffTime", "ffEnd", "ffEst", "ffTag", "ffPlace"]) {
+    $(id).value = "";
+  }
+  $("ffPriority").checked = false;
+  form.days.clear();
+  for (const b of $("ffDays").children) b.classList.remove("on");
+  await refreshPreview();
+  await refresh();
+  showEcho(res);
+  $("ffTitle").focus();
+}
+
+function initForm() {
+  buildDayButtons();
+  const panel = $("addFields");
+  $("formToggle").onclick = () => {
+    panel.hidden = !panel.hidden;
+    $("formToggle").classList.toggle("open", !panel.hidden);
+    if (!panel.hidden) {
+      $("ffTitle").value = $("addInput").value.trim();
+      refreshPreview();
+      $("ffTitle").focus();
+    }
+  };
+
+  for (const id of ["ffTitle", "ffDate", "ffTime", "ffEnd", "ffEst", "ffTag", "ffPlace"]) {
+    $(id).oninput = refreshPreview;
+    $(id).onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitFields();
+      }
+    };
+  }
+  $("ffPriority").onchange = refreshPreview;
+  for (const b of $("ffKind").children) {
+    b.onclick = () => {
+      form.kind = b.dataset.kind;
+      for (const other of $("ffKind").children) other.classList.toggle("on", other === b);
+      refreshPreview();
+    };
+  }
+  $("ffAdd").onclick = submitFields;
+  refreshPreview();
+}
+initForm();
+
 let echoTimer = null;
 /** Say what was understood. A line the parser did not recognise is saved whole
  *  — which is correct, but silent, and silence is how a typo goes unnoticed. */
@@ -756,6 +902,113 @@ function makeDraggable(row, item) {
     } catch {
       // Capture is an optimisation; the window listeners do the real work.
     }
+  });
+}
+
+/* ── moving and resizing a block ────────────────────────────────────── */
+
+/** Round to the nearest quarter hour. Finer than that is noise on a grid this
+ *  size, and coarser loses the 45-minute meeting. */
+const SNAP_MIN = 15;
+const MIN_BLOCK_MIN = 15;
+const snap = (mins) => Math.round(mins / SNAP_MIN) * SNAP_MIN;
+
+/** Minutes from midnight at a y position inside a column, from the real row
+ *  geometry — rows are not equal heights once empty ones collapse. */
+function minutesAt(y, colTop, hours, heightOf) {
+  let acc = colTop;
+  for (const h of hours) {
+    const height = heightOf(h);
+    if (y < acc + height) return h * 60 + ((y - acc) / height) * 60;
+    acc += height;
+  }
+  const last = hours[hours.length - 1];
+  return last * 60 + 59;
+}
+
+function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
+  ev.style.touchAction = "none";
+
+  ev.addEventListener("pointerdown", (e) => {
+    const resizing = e.target === grip;
+    const col = ev.parentElement;
+    const startY = e.clientY;
+    const startX = e.clientX;
+    const s = new Date(p.starts_at);
+    const eAt = new Date(p.ends_at);
+    const lengthMin = Math.max(MIN_BLOCK_MIN, (eAt - s) / 60000);
+    const startMin = s.getHours() * 60 + s.getMinutes();
+    let dragging = false;
+    let latest = null;
+
+    const move = (mv) => {
+      if (!dragging) {
+        if (Math.hypot(mv.clientX - startX, mv.clientY - startY) < 4) return;
+        dragging = true;
+        ev.classList.add("dragging");
+      }
+      const colTop = col.getBoundingClientRect().top;
+      const atCursor = minutesAt(mv.clientY, colTop, hours, heightOf);
+
+      if (resizing) {
+        const end = Math.max(startMin + MIN_BLOCK_MIN, snap(atCursor));
+        latest = { startMin, endMin: Math.min(end, 24 * 60), date };
+      } else {
+        // Keep the grab point inside the block rather than snapping its top to
+        // the cursor, so a block does not jump when you pick it up.
+        const grabOffset = startMin + (minutesAt(startY, colTop, hours, heightOf) - startMin);
+        const delta = atCursor - grabOffset;
+        let top = snap(startMin + delta);
+        top = Math.max(0, Math.min(top, 24 * 60 - lengthMin));
+        const hit = hitTest(mv.clientX, mv.clientY);
+        latest = { startMin: top, endMin: top + lengthMin, date: hit ? hit.date : date };
+      }
+      // Preview in place: the pixel maths is the same as the renderer's.
+      const topPx = offsets[Math.floor(latest.startMin / 60)];
+      if (topPx !== undefined) {
+        ev.style.top = `${topPx + (latest.startMin % 60) / 60 * heightOf(Math.floor(latest.startMin / 60))}px`;
+        ev.style.height = `${Math.max(18, ((latest.endMin - latest.startMin) / 60) * ROW_H)}px`;
+      }
+    };
+
+    const up = async (mv) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      ev.classList.remove("dragging");
+      if (!dragging || !latest) return;
+
+      const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      const starts = rfc(new Date(`${latest.date}T${hhmm(latest.startMin)}:00`));
+      const ends = rfc(new Date(`${latest.date}T${hhmm(Math.min(latest.endMin, 24 * 60 - 1))}:00`));
+
+      try {
+        if (p.recurs) {
+          // A recurring occurrence is generated, not stored: moving it means
+          // cancelling that date and placing a real block at the new time.
+          await invoke("cmd_move_occurrence", {
+            itemId: p.item_id,
+            date,
+            startsAt: starts,
+            endsAt: ends,
+          });
+        } else {
+          await invoke("cmd_move_placement", { id: p.id, startsAt: starts, endsAt: ends });
+        }
+        await refresh();
+      } catch (err) {
+        showError(String(err));
+        await refresh();
+      }
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    try {
+      ev.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Capture is an optimisation; the window listeners do the real work.
+    }
+    e.stopPropagation();
   });
 }
 
