@@ -161,7 +161,6 @@ function renderWeek() {
       focusPane("todos");
       render();
     };
-    armPeek(b, day.date);
     heads.appendChild(b);
   });
 
@@ -220,7 +219,6 @@ function renderWeek() {
       + (day.date === todayIso ? " today" : "")
       + (state.peekDay === day.date ? " peek" : "")
       + (day.date === wideDay ? " wide" : "");
-    armPeek(col, day.date);
     col.onclick = (e) => {
       // An existing block owns its own click; so does the composer once open.
       if (e.target.closest(".ev, .slotAdd")) return;
@@ -815,31 +813,6 @@ document.addEventListener("keydown", (e) => {
     $("addInput").focus();
   }
 });
-
-/* ── day peek ───────────────────────────────────────────────────────── */
-let peekTimer = null;
-
-/** A second of hover widens the day and previews its to-dos. Deliberately slow
- *  so brushing past the grid does not make it jump about. */
-function armPeek(node, date) {
-  node.addEventListener("pointerenter", () => {
-    clearTimeout(peekTimer);
-    peekTimer = setTimeout(() => {
-      if (state.slotBox) return;
-      if (state.peekDay === date) return;
-      state.peekDay = date;
-      render();
-    }, 1000);
-  });
-  node.addEventListener("pointerleave", () => {
-    clearTimeout(peekTimer);
-    if (state.slotBox) return;
-    if (state.peekDay === date) {
-      state.peekDay = null;
-      render();
-    }
-  });
-}
 
 /* ── drag a task onto the week ──────────────────────────────────────── */
 /** Dropping creates a placement for the SAME item, never a copy. Spec 3.1. */
