@@ -4,7 +4,7 @@
 use chrono::{Local, NaiveDate, Utc};
 use ms_core::{
     active_session, add_from_text, add_placement, delete_item, delete_placement, get_items,
-    get_week, help_text, move_occurrence, move_placement, restore_occurrence, set_done,
+    get_days, help_text, move_occurrence, move_placement, restore_occurrence, set_done,
     set_recurrence_tz, stats, store, set_estimate, set_listed, sweep_stale_sessions, timer_start,
     timer_stop, Db, Filter,
 };
@@ -118,11 +118,13 @@ pub struct DiagDto {
 fn cmd_get_week(state: State<'_, AppDb>, anchor: Option<String>) -> Result<WeekDto, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let today = Local::now().date_naive();
+    // No anchor means the rolling window: yesterday, today and the five after.
     let anchor = anchor
         .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok())
-        .unwrap_or(today);
+        .unwrap_or_else(|| today.pred_opt().unwrap_or(today));
 
-    let week = get_week(&db, anchor, viewing_zone());
+    // Exactly where it was asked to start. The window is not a calendar week.
+    let week = get_days(&db, anchor, viewing_zone());
     Ok(WeekDto {
         anchor: week.anchor.to_string(),
         viewing_tz: week.viewing_tz.clone(),

@@ -11,9 +11,9 @@
 //! 2. Anything already begun, or already ticked off, is not announced.
 
 use crate::db::Db;
-use crate::expand::get_week;
+use crate::expand::get_days;
 use crate::store::{get_items, Filter, Item};
-use chrono::{DateTime, Datelike, Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use std::collections::{HashMap, HashSet};
 
@@ -52,32 +52,32 @@ pub fn due_soon(db: &Db, now: DateTime<Utc>, lead: Duration, zone: Tz) -> Vec<No
     // announced twice at the same moment.
     let mut placed: HashSet<(String, DateTime<Utc>)> = HashSet::new();
 
-    // Two weeks, because the horizon can sit on the far side of Monday.
+    // From yesterday: an occurrence pinned to a zone behind this one belongs to
+    // yesterday's date there and can still be ahead of now here. Seven days is
+    // far more than any lead time, so one window covers it.
     let today = now.with_timezone(&zone).date_naive();
-    let monday = today - Duration::days(today.weekday().num_days_from_monday() as i64);
-    for week in [monday, monday + Duration::days(7)] {
-        for day in get_week(db, week, zone).days {
-            for p in day.placements {
-                let start = p.starts_at.with_timezone(&Utc);
-                if start <= now || start > horizon {
-                    continue;
-                }
-                let Some(item) = by_id.get(p.item_id.as_str()) else {
-                    continue;
-                };
-                if item.is_done(Some(day.date)) {
-                    continue;
-                }
-                placed.insert((p.item_id.clone(), start));
-                out.push(Notice {
-                    key: format!("{}@{}", p.id, start.to_rfc3339()),
-                    kind: Kind::Block,
-                    title: item.title.clone(),
-                    location: item.location.clone(),
-                    at: start,
-                    ends: Some(p.ends_at.with_timezone(&Utc)),
-                });
+    let from = today.pred_opt().unwrap_or(today);
+    for day in get_days(db, from, zone).days {
+        for p in day.placements {
+            let start = p.starts_at.with_timezone(&Utc);
+            if start <= now || start > horizon {
+                continue;
             }
+            let Some(item) = by_id.get(p.item_id.as_str()) else {
+                continue;
+            };
+            if item.is_done(Some(day.date)) {
+                continue;
+            }
+            placed.insert((p.item_id.clone(), start));
+            out.push(Notice {
+                key: format!("{}@{}", p.id, start.to_rfc3339()),
+                kind: Kind::Block,
+                title: item.title.clone(),
+                location: item.location.clone(),
+                at: start,
+                ends: Some(p.ends_at.with_timezone(&Utc)),
+            });
         }
     }
 

@@ -269,9 +269,9 @@ fn validate(raw: RawRule, viewing: Tz, diags: &mut Vec<Diagnostic>) -> Option<Ru
     Some(Rule { item_id: id, days, start, end, zone, pinned_tz, from, until, except })
 }
 
-/// Snap to the Monday of the anchor's week, clamped so the whole week is
-/// representable. Plain date arithmetic panics at the calendar bounds.
-fn normalise_anchor(anchor: NaiveDate, diags: &mut Vec<Diagnostic>) -> NaiveDate {
+/// Clamp a start date so all seven days from it are representable. Plain date
+/// arithmetic panics at the calendar bounds.
+fn clamp_start(anchor: NaiveDate, diags: &mut Vec<Diagnostic>) -> NaiveDate {
     let latest_start = NaiveDate::MAX
         .checked_sub_signed(Duration::days(6))
         .unwrap_or(NaiveDate::MAX);
@@ -284,14 +284,14 @@ fn normalise_anchor(anchor: NaiveDate, diags: &mut Vec<Diagnostic>) -> NaiveDate
             message: format!("Week starting {anchor} is past the end of the calendar; showing {clamped}"),
         });
     }
+    clamped
+}
 
-    let back = clamped.weekday().num_days_from_monday() as i64;
-    match clamped.checked_sub_signed(Duration::days(back)) {
-        Some(monday) => monday,
-        // Only reachable within six days of NaiveDate::MIN, where no earlier
-        // Monday exists. Keep the week rather than fail.
-        None => clamped,
-    }
+/// The Monday of the date's week. Within six days of NaiveDate::MIN there is no
+/// earlier Monday, so the date itself: keep the week rather than fail.
+fn week_start(date: NaiveDate) -> NaiveDate {
+    let back = date.weekday().num_days_from_monday() as i64;
+    date.checked_sub_signed(Duration::days(back)).unwrap_or(date)
 }
 
 /// One-off blocks stored explicitly, as opposed to generated from a rule.
@@ -351,11 +351,20 @@ fn load_placements(db: &Db, viewing: Tz, diags: &mut Vec<Diagnostic>) -> Vec<Sto
     out
 }
 
-/// Total function: returns a Week with up to 7 days for any database state.
-/// Never panics, never returns Err. Problems surface as `Week.diagnostics`.
+/// The calendar week containing `anchor`, Monday first — for the CLI and the
+/// bot, which answer "what is on this week". The window rolls instead.
 pub fn get_week(db: &Db, anchor: NaiveDate, viewing: Tz) -> Week {
+    get_days(db, week_start(anchor), viewing)
+}
+
+/// Seven days starting exactly at `start`.
+///
+/// Total function: up to 7 days for any database state and any start. Never
+/// panics, never returns Err; a start past the end of the calendar is clamped,
+/// and problems surface as `Week.diagnostics`.
+pub fn get_days(db: &Db, start: NaiveDate, viewing: Tz) -> Week {
     let mut diagnostics = Vec::new();
-    let anchor = normalise_anchor(anchor, &mut diagnostics);
+    let anchor = clamp_start(start, &mut diagnostics);
     let rules: Vec<Rule> = load_rules(db, &mut diagnostics)
         .into_iter()
         .filter_map(|raw| validate(raw, viewing, &mut diagnostics))

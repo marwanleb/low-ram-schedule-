@@ -224,14 +224,12 @@ body.todoFocus #todoPane { flex-basis: 62%; }
   background: #0f3a5e;
   border-bottom: 2px solid var(--line);
 }
-.filterBar.peek { background: rgba(20, 32, 45, .9); }
 .filterBar span {
   font-family: Silkscreen, monospace;
   font-size: 10px;
   letter-spacing: .1em;
   color: var(--on-blue);
 }
-.filterBar.peek span { color: #8fbcd6; }
 .btn.tiny {
   font-size: 9px;
   padding: 5px 9px;
@@ -265,9 +263,6 @@ body.todoFocus #todoPane { flex-basis: 62%; }
 .dayHead .dn { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .dayHead.weekend .wd { color: var(--dimmer); }
 .dayHead.weekend .dn { color: var(--dim); }
-.dayHead.peek { background: rgba(207, 234, 246, .06); }
-.dayHead.peek .wd { color: #dff0fa; }
-.dayHead.peek .dn { color: #f2f8fc; }
 .dayHead.today { background: rgba(245, 185, 66, 0.055); }
 .dayHead.today .wd { color: var(--gold); }
 .dayHead.today .dn { color: var(--gold-light); }
@@ -305,7 +300,6 @@ body.todoFocus #todoPane { flex-basis: 62%; }
   transition: background-color 0.3s;
 }
 .dayCol.today { background: rgba(245, 185, 66, 0.055); }
-.dayCol.peek { background: rgba(207, 234, 246, .045); }
 .spacer { border-bottom: 1px solid var(--line-hour); transition: height 0.34s var(--ease-row); }
 
 .ev {

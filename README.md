@@ -25,11 +25,6 @@ skips any of it. A complete line is never questioned.
 
 ## Two gestures worth knowing
 
-Hovering a day for a second widens it and filters the list to that day. Let go
-and it reverts; click to make it stick.
-
-![Hovering Saturday widens the column and filters the list to it](docs/screenshots/day-peek.png)
-
 Clicking an empty hour opens a box in that slot. What you type goes through the
 same grammar as everywhere else, so `climb ~90m` becomes a ninety-minute block
 at three on Saturday.

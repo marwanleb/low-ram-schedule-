@@ -11,7 +11,7 @@ pub mod store;
 pub mod timer;
 
 pub use db::Db;
-pub use expand::get_week;
+pub use expand::{get_days, get_week};
 pub use command::{help_text, interpret, Command, ListScope};
 pub use compose::{line, Fields, Kind as ComposeKind};
 pub use import::{import, ImportOutcome, ImportRecord, ImportRepeat};

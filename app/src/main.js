@@ -23,8 +23,8 @@ const state = {
   items: [],
   session: null,      // running timer, or null
   pinDay: null,       // clicked day — sticky filter
-  peekDay: null,      // hover-held day — transient, also widens the column
   slotBox: null,      // open slot composer; while it exists the grid holds still
+  following: true,    // showing the rolling window, so it moves when the date does
   focus: "schedule",
 };
 
@@ -40,10 +40,12 @@ const fromIso = (s) => {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 };
-const mondayOf = (d) => {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7));
-  return copy;
+/** The window starts yesterday, so today is always second from the left and
+ *  the view rolls forward a day at a time instead of jumping on Mondays. */
+const rollingStart = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return iso(d);
 };
 const WD = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -65,6 +67,8 @@ function fmtMins(m) {
 
 /* ── loading ───────────────────────────────────────────────────────── */
 async function refresh() {
+  // Re-read every time, so a window left open overnight rolls to the new day.
+  if (state.following) state.anchor = rollingStart();
   const [week, items, session] = await Promise.all([
     invoke("cmd_get_week", { anchor: state.anchor }),
     invoke("cmd_get_items", { openOnly: false }),
@@ -97,8 +101,14 @@ function render() {
 }
 
 function renderHeader() {
-  const mon = fromIso(state.anchor);
-  $("weekTitle").textContent = `WEEK OF ${MON[mon.getMonth()]} ${mon.getDate()}`;
+  // Seven days from wherever the window starts. Not a calendar week, so the
+  // title is the range itself.
+  const first = fromIso(state.anchor);
+  const last = new Date(first);
+  last.setDate(last.getDate() + 6);
+  $("weekTitle").textContent = first.getMonth() === last.getMonth()
+    ? `${MON[first.getMonth()]} ${first.getDate()} - ${last.getDate()}`
+    : `${MON[first.getMonth()]} ${first.getDate()} - ${MON[last.getMonth()]} ${last.getDate()}`;
   const tz = state.week.viewing_tz || "";
   $("zoneChip").textContent = tz.split("/").pop().replace(/_/g, " ").toUpperCase() || "—";
   $("zoneChip").title = tz;
@@ -142,19 +152,21 @@ function renderWeek() {
   spacer.className = "headGutter";
   heads.appendChild(spacer);
 
-  // Exactly one column is wide: the peeked day if there is one, else today.
-  const wideDay = state.peekDay || todayIso;
+  // Exactly one column is wide: today's.
+  const wideDay = todayIso;
 
-  state.week.days.forEach((day, i) => {
+  state.week.days.forEach((day) => {
     const b = document.createElement("button");
     b.className = "dayHead";
-    if (day.date === todayIso) b.classList.add("today");
-    if (i >= 5) b.classList.add("weekend");
-    if (state.pinDay === day.date) b.classList.add("sel");
-    if (state.peekDay === day.date) b.classList.add("peek");
-    if (day.date === wideDay) b.classList.add("wide");
+    // From the date, not the column: the window starts yesterday, so the first
+    // column is Monday only one day in seven.
     const d = fromIso(day.date);
-    b.innerHTML = `<span class="wd">${WD[i]}</span><span class="dn">${d.getDate()}</span>`;
+    const dow = (d.getDay() + 6) % 7;
+    if (day.date === todayIso) b.classList.add("today");
+    if (dow >= 5) b.classList.add("weekend");
+    if (state.pinDay === day.date) b.classList.add("sel");
+    if (day.date === wideDay) b.classList.add("wide");
+    b.innerHTML = `<span class="wd">${WD[dow]}</span><span class="dn">${d.getDate()}</span>`;
     b.onclick = (e) => {
       e.stopPropagation();
       state.pinDay = state.pinDay === day.date ? null : day.date;
@@ -217,7 +229,6 @@ function renderWeek() {
     const col = document.createElement("div");
     col.className = "dayCol"
       + (day.date === todayIso ? " today" : "")
-      + (state.peekDay === day.date ? " peek" : "")
       + (day.date === wideDay ? " wide" : "");
     col.onclick = (e) => {
       // An existing block owns its own click; so does the composer once open.
@@ -324,9 +335,29 @@ function bucketOf(item) {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
   if (due <= today) return "today";
-  const endOfWeek = fromIso(state.anchor);
-  endOfWeek.setDate(endOfWeek.getDate() + 7);
-  return due < endOfWeek ? "week" : "someday";
+  // "This week" is the next seven days from today, not whichever seven are on
+  // screen, so browsing ahead does not reshuffle the list. The same line
+  // decides whether a chip shows a weekday or a date.
+  return daysAway(due) < 7 ? "week" : "someday";
+}
+
+/** Whole calendar days from today to the date's own day; negative if past.
+ *  Rounded, because a day with a DST change is 23 or 25 hours long. */
+function daysAway(d) {
+  const a = new Date();
+  a.setHours(0, 0, 0, 0);
+  const b = new Date(d);
+  b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+}
+
+/** Within a week the weekday is enough and reads fastest. Further out "FRI"
+ *  could be any Friday, so it becomes the date and how far away it is. */
+function dueLabel(d) {
+  const n = daysAway(d);
+  if (Math.abs(n) < 7) return WD[(d.getDay() + 6) % 7];
+  const date = `${d.getDate()} ${MON[d.getMonth()]}`;
+  return n > 0 ? `${date} · ${n}D` : `${date} · ${-n}D AGO`;
 }
 
 /** Nearest deadline first. Undated sink to the bottom, and so do ticked
@@ -344,9 +375,8 @@ function renderTodos() {
   const wrap = $("buckets");
   wrap.innerHTML = "";
 
-  // A peeked day filters the list the same way a pinned one does; pinning just
-  // makes it stick. Spec: "Day peek and pin".
-  const focusDay = state.peekDay || state.pinDay;
+  // A pinned day filters the list to that day.
+  const focusDay = state.pinDay;
   // A finished item lingers for an hour, then clears. Repeating items are
   // unaffected — their tick belongs to one occurrence and lapses on its own.
   const now = Date.now();
@@ -364,12 +394,8 @@ function renderTodos() {
     const d = fromIso(focusDay);
     const wd = WD[(d.getDay() + 6) % 7];
     bar.hidden = false;
-    bar.classList.toggle("peek", !state.pinDay);
-    $("filterLabel").textContent = state.pinDay
-      ? `FILTERED · ${wd}`
-      : `PEEKING · ${wd} ${d.getDate()}`;
-    // Peeking evaporates on its own, so it offers nothing to clear.
-    $("filterClear").hidden = !state.pinDay;
+    $("filterLabel").textContent = `FILTERED · ${wd}`;
+    $("filterClear").hidden = false;
   } else {
     bar.hidden = true;
   }
@@ -433,7 +459,7 @@ function taskRow(item) {
   }
   if (item.due_at) {
     const d = new Date(item.due_at);
-    chips.appendChild(chip(WD[(d.getDay() + 6) % 7], color));
+    chips.appendChild(chip(dueLabel(d), color));
   }
   if (item.recurs) chips.appendChild(chip("↻", color));
 
@@ -512,6 +538,11 @@ setInterval(tickTimer, 1000);
 // hour passing. Re-renders only when something has actually aged out.
 setInterval(() => {
   if (!state.week || state.slotBox) return;
+  // Midnight passed with the window open: roll it on by a day.
+  if (state.following && state.anchor !== rollingStart()) {
+    refresh();
+    return;
+  }
   const now = Date.now();
   const stale = state.items.some(
     (i) => i.listed && i.done && i.completed_at &&
@@ -729,6 +760,8 @@ function shiftWeek(delta) {
   const d = fromIso(state.anchor);
   d.setDate(d.getDate() + delta * 7);
   state.anchor = iso(d);
+  // Browsing away stops the window following the date; coming back resumes it.
+  state.following = state.anchor === rollingStart();
   refresh();
 }
 $("filterClear").onclick = (e) => {
@@ -743,11 +776,12 @@ $("nextWeek").onclick = (e) => { e.stopPropagation(); shiftWeek(1); };
 function renderPicker() {
   const rows = $("pickRows");
   rows.innerHTML = "";
-  const thisMonday = mondayOf(new Date());
+  // Rows step seven days from the rolling window, so the first one is "now".
+  const base = fromIso(rollingStart());
   const shown = fromIso(state.anchor);
 
   for (let off = -4; off <= 28; off++) {
-    const start = new Date(thisMonday);
+    const start = new Date(base);
     start.setDate(start.getDate() + off * 7);
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
@@ -769,6 +803,7 @@ function renderPicker() {
     b.onclick = (e) => {
       e.stopPropagation();
       state.anchor = iso(start);
+      state.following = off === 0;
       state.pinDay = null;
       $("weekPicker").hidden = true;
       refresh();
@@ -1164,7 +1199,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ── go ────────────────────────────────────────────────────────────── */
-state.anchor = iso(mondayOf(new Date()));
+state.anchor = rollingStart();
 startSky(document.getElementById("sky"));
 refresh().catch((e) => {
   document.body.insertAdjacentHTML(

@@ -82,11 +82,17 @@ const blocks = EMPTY ? [] : [
   ...oneOff("seminar reading", 1, "20:00", "21:30", null, "work"),
 ];
 
-const days = [];
-for (let i = 0; i < 7; i++) {
-  days.push({ date: iso(i), placements: blocks.filter((p) => p.starts_at.startsWith(iso(i))) });
+/** Seven days from whatever start the app asks for, as the real backend does. */
+function weekFrom(anchor) {
+  const [y, m, d] = (anchor || MONDAY).split("-").map(Number);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(y, m - 1, d + i);
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    days.push({ date: key, placements: blocks.filter((p) => p.starts_at.startsWith(key)) });
+  }
+  return { anchor: days[0].date, viewing_tz: "America/Chicago", days, diagnostics: [] };
 }
-const week = { anchor: MONDAY, viewing_tz: "America/Chicago", days, diagnostics: [] };
 
 function todo(title, dueOffset, dueTime, opts = {}) {
   return {
@@ -121,6 +127,7 @@ const todos = EMPTY ? [] : [
   todo("farmers market", 5, "10:00", { category: "life" }),
   todo("call home", 5, "18:00", { estimate_min: 30, category: "social" }),
   todo("book flights home", 6, "23:59", { estimate_min: 45, category: "life" }),
+  todo("renew passport", 30, "12:00", { category: "life" }),
   todo("renew parking", null, null, { category: "life" }),
   todo("fix the bike", null, null, { estimate_min: 90, category: "body" }),
   todo("start the reading list", null, null, {}),
@@ -145,7 +152,7 @@ window.__TAURI__ = {
       window.__calls.push({ cmd, args });
       console.log("[INVOKE]", cmd, JSON.stringify(args || {}));
       switch (cmd) {
-        case "cmd_get_week": return week;
+        case "cmd_get_week": return weekFrom(args && args.anchor);
         case "cmd_get_items": return items;
         case "cmd_active_session": return session;
         case "cmd_stats": return EMPTY ? { phrase: null, n: 0 } : { phrase: "about a third longer", n: 18 };
