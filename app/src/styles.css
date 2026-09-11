@@ -37,7 +37,6 @@
   --row-h-collapsed: 17px;
   --gutter: 52px;
 
-  --ease-pane: cubic-bezier(0.45, 0, 0.2, 1);
   --ease-row: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -165,13 +164,11 @@ main {
   backdrop-filter: blur(3px);
   border: 2px solid var(--line);
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  transition: flex-basis 0.5s var(--ease-pane), border-color 0.3s;
+  transition: border-color 0.3s;
   cursor: pointer;
 }
 #schedulePane { flex: 1 1 64%; }
 #todoPane { flex: 1 1 36%; }
-body.todoFocus #schedulePane { flex-basis: 38%; }
-body.todoFocus #todoPane { flex-basis: 62%; }
 #schedulePane.focused { border-color: var(--edge-schedule); }
 #todoPane.focused { border-color: var(--edge-todo); }
 

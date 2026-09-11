@@ -749,7 +749,6 @@ $("helpOverlay").onclick = (e) => {
 
 function focusPane(which) {
   state.focus = which;
-  document.body.classList.toggle("todoFocus", which === "todos");
   $("schedulePane").classList.toggle("focused", which === "schedule");
   $("todoPane").classList.toggle("focused", which === "todos");
 }
