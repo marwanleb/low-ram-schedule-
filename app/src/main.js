@@ -263,6 +263,9 @@ function renderWeek() {
 
       ev.onclick = (evt) => {
         evt.stopPropagation();
+        // The release that ends a move or resize is also a click; it must not
+        // open the popover.
+        if (ev.dataset.dragged) return;
         const item = state.items.find((i) => i.id === p.item_id);
         if (item) openDetail(item, day.date, refresh);
       };
@@ -948,6 +951,12 @@ function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       ev.classList.remove("dragging");
+      if (dragging) {
+        // Set before the first await: the browser dispatches the click that
+        // follows this pointerup before any timer or network reply can run.
+        ev.dataset.dragged = "1";
+        setTimeout(() => delete ev.dataset.dragged, 0);
+      }
       if (!dragging || !latest) return;
 
       const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
