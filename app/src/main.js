@@ -916,6 +916,10 @@ function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
     const startMin = s.getHours() * 60 + s.getMinutes();
     let dragging = false;
     let latest = null;
+    // Where the block sat when picked up, and where the pointer last was.
+    const startRect = ev.getBoundingClientRect();
+    let lastX = startX;
+    let lastY = startY;
 
     const move = (mv) => {
       if (!dragging) {
@@ -923,22 +927,21 @@ function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
         dragging = true;
         ev.classList.add("dragging");
       }
+      lastX = mv.clientX;
+      lastY = mv.clientY;
+
+      if (!resizing) {
+        // Follow the pointer exactly, across days as well as hours. Nothing
+        // snaps until release; the column it will land in is highlighted.
+        ev.style.transform = `translate(${mv.clientX - startX}px, ${mv.clientY - startY}px)`;
+        highlight(hitTest(mv.clientX, mv.clientY));
+        return;
+      }
+
       const colTop = col.getBoundingClientRect().top;
       const atCursor = minutesAt(mv.clientY, colTop, hours, heightOf);
-
-      if (resizing) {
-        const end = Math.max(startMin + MIN_BLOCK_MIN, snap(atCursor));
-        latest = { startMin, endMin: Math.min(end, 24 * 60), date };
-      } else {
-        // Keep the grab point inside the block rather than snapping its top to
-        // the cursor, so a block does not jump when you pick it up.
-        const grabOffset = startMin + (minutesAt(startY, colTop, hours, heightOf) - startMin);
-        const delta = atCursor - grabOffset;
-        let top = snap(startMin + delta);
-        top = Math.max(0, Math.min(top, 24 * 60 - lengthMin));
-        const hit = hitTest(mv.clientX, mv.clientY);
-        latest = { startMin: top, endMin: top + lengthMin, date: hit ? hit.date : date };
-      }
+      const end = Math.max(startMin + MIN_BLOCK_MIN, snap(atCursor));
+      latest = { startMin, endMin: Math.min(end, 24 * 60), date };
       // Preview in place: the pixel maths is the same as the renderer's.
       const topPx = offsets[Math.floor(latest.startMin / 60)];
       if (topPx !== undefined) {
@@ -957,7 +960,27 @@ function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
         ev.dataset.dragged = "1";
         setTimeout(() => delete ev.dataset.dragged, 0);
       }
-      if (!dragging || !latest) return;
+      if (!dragging) return;
+
+      if (!resizing) {
+        highlight(null);
+        lastX = mv.clientX ?? lastX;
+        lastY = mv.clientY ?? lastY;
+        const hit = hitTest(lastX, lastY);
+        if (!hit) {
+          // Let go outside every column: put it back rather than guess a day.
+          ev.style.transform = "";
+          return;
+        }
+        // The block's own top edge decides the time, so the grab point within
+        // it is kept; the column under the pointer decides the day.
+        const colTop = hit.col.getBoundingClientRect().top;
+        const topEdge = startRect.top + (lastY - startY);
+        let top = snap(minutesAt(topEdge, colTop, hours, heightOf));
+        top = Math.max(0, Math.min(top, 24 * 60 - lengthMin));
+        latest = { startMin: top, endMin: top + lengthMin, date: hit.date };
+      }
+      if (!latest) return;
 
       const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
       const starts = rfc(new Date(`${latest.date}T${hhmm(latest.startMin)}:00`));
