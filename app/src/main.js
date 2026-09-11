@@ -579,6 +579,7 @@ const DAY_CODES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const form = {
   kind: "task",
   days: new Set(),
+  monthly: false,
 };
 
 function buildDayButtons() {
@@ -591,10 +592,32 @@ function buildDayButtons() {
     b.onclick = () => {
       form.days.has(code) ? form.days.delete(code) : form.days.add(code);
       b.classList.toggle("on", form.days.has(code));
+      if (form.monthly) {
+        form.monthly = false;
+        wrap.querySelector(".ffMonthly")?.classList.remove("on");
+      }
       refreshPreview();
     };
     wrap.appendChild(b);
   }
+
+  // Monthly and weekdays are two different cadences; picking one clears the
+  // other rather than composing a line that means neither.
+  const m = document.createElement("button");
+  m.type = "button";
+  m.className = "ffMonthly";
+  m.textContent = "MONTHLY";
+  m.title = "on the date's day each month";
+  m.onclick = () => {
+    form.monthly = !form.monthly;
+    m.classList.toggle("on", form.monthly);
+    if (form.monthly) {
+      form.days.clear();
+      for (const b of wrap.children) if (b !== m) b.classList.remove("on");
+    }
+    refreshPreview();
+  };
+  wrap.appendChild(m);
 }
 
 /** "90m", "2h", "1.5h" or a bare number of minutes. Anything else is nothing,
@@ -616,7 +639,8 @@ function readFields() {
   return {
     title: $("ffTitle").value.trim(),
     priority: $("ffPriority").checked,
-    repeat: DAY_CODES.filter((d) => form.days.has(d)),
+    repeat: form.monthly ? [] : DAY_CODES.filter((d) => form.days.has(d)),
+    monthly: form.monthly,
     kind: form.kind,
     date: $("ffDate").value || null,
     at: time,
@@ -634,9 +658,11 @@ async function refreshPreview() {
   const f = readFields();
   // A repeat has no single date. Say so by greying the field rather than
   // letting someone fill in a date the grammar will drop.
+  // A monthly repeat keeps it: the date says which day of the month.
   const repeating = f.repeat.length > 0;
   $("ffDate").disabled = repeating;
-  $("ffDate").title = repeating ? "a repeat has no single date" : "";
+  $("ffDate").title = repeating ? "a repeat has no single date"
+    : f.monthly ? "the day of the month it repeats on" : "";
 
   if (!f.title) {
     previewLine = "";
@@ -663,6 +689,7 @@ async function submitFields() {
   }
   $("ffPriority").checked = false;
   form.days.clear();
+  form.monthly = false;
   for (const b of $("ffDays").children) b.classList.remove("on");
   await refreshPreview();
   await refresh();

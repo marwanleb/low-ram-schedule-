@@ -164,6 +164,8 @@ fn round_trips_over_generated_fields() {
             title: titles[(r >> 10) as usize % titles.len()].into(),
             priority: (r >> 14) % 8 == 0,
             repeat: if repeats { vec!["tue".into()] } else { vec![] },
+            // Monthly has its own round trip in tests/monthly.rs.
+            monthly: false,
             kind: if (r >> 15) % 2 == 0 { Kind::Task } else { Kind::Block },
             date: (has_date && !repeats).then(|| d(2026, 9, 1 + ((r >> 16) % 28) as u32)),
             at: has_time.then_some(at),

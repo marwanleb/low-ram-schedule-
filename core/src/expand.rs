@@ -19,6 +19,7 @@ struct RawRule {
     from_date: String,
     until_date: Option<String>,
     except_on: String,
+    monthday: Option<i64>,
 }
 
 /// A rule that has survived validation and can be expanded without failing.
@@ -33,12 +34,14 @@ struct Rule {
     from: NaiveDate,
     until: Option<NaiveDate>,
     except: Vec<NaiveDate>,
+    /// Day of the month for a monthly rule; None for a weekly one.
+    monthday: Option<u32>,
 }
 
 fn load_rules(db: &Db, diags: &mut Vec<Diagnostic>) -> Vec<RawRule> {
     let stmt = db
         .conn
-        .prepare("SELECT item_id, byday, start_time, end_time, tz, from_date, until_date, except_on FROM recurrence");
+        .prepare("SELECT item_id, byday, start_time, end_time, tz, from_date, until_date, except_on, monthday FROM recurrence");
     let mut stmt = match stmt {
         Ok(s) => s,
         Err(e) => {
@@ -62,6 +65,7 @@ fn load_rules(db: &Db, diags: &mut Vec<Diagnostic>) -> Vec<RawRule> {
             from_date: r.get(5)?,
             until_date: r.get(6)?,
             except_on: r.get(7)?,
+            monthday: r.get(8)?,
         })
     });
     match rows {
@@ -230,9 +234,20 @@ fn validate(raw: RawRule, viewing: Tz, diags: &mut Vec<Diagnostic>) -> Option<Ru
         .filter(|c| DAY_CODES.contains(&c.as_str()))
         .collect();
 
+    // A monthly rule names a day of the month instead of weekdays. One outside
+    // 1..=31 can never occur, and is reported like an empty weekday list.
+    let monthday = match raw.monthday {
+        None => None,
+        Some(n) if (1..=31).contains(&n) => Some(n as u32),
+        Some(n) => {
+            warn(diags, &id, format!("Recurrence never occurs: day of month {n} is out of range"));
+            return None;
+        }
+    };
+
     // A rule that matches no weekday generates nothing forever, which is
     // indistinguishable from the item being lost unless it is reported.
-    if days.is_empty() {
+    if days.is_empty() && monthday.is_none() {
         warn(diags, &id, format!(
             "Recurrence never occurs: no usable weekday in {:?}", raw.byday
         ));
@@ -266,7 +281,7 @@ fn validate(raw: RawRule, viewing: Tz, diags: &mut Vec<Diagnostic>) -> Option<Ru
         }
     }
 
-    Some(Rule { item_id: id, days, start, end, zone, pinned_tz, from, until, except })
+    Some(Rule { item_id: id, days, start, end, zone, pinned_tz, from, until, except, monthday })
 }
 
 /// Clamp a start date so all seven days from it are representable. Plain date
@@ -292,6 +307,17 @@ fn clamp_start(anchor: NaiveDate, diags: &mut Vec<Diagnostic>) -> NaiveDate {
 fn week_start(date: NaiveDate) -> NaiveDate {
     let back = date.weekday().num_days_from_monday() as i64;
     date.checked_sub_signed(Duration::days(back)).unwrap_or(date)
+}
+
+/// The number of the last day of the date's month.
+fn last_day_of_month(date: NaiveDate) -> u32 {
+    let next = if date.month() == 12 {
+        NaiveDate::from_ymd_opt(date.year() + 1, 1, 1)
+    } else {
+        NaiveDate::from_ymd_opt(date.year(), date.month() + 1, 1)
+    };
+    // Only None past the end of the calendar, where 31 is as good as any.
+    next.and_then(|n| n.pred_opt()).map_or(31, |last| last.day())
 }
 
 /// One-off blocks stored explicitly, as opposed to generated from a rule.
@@ -388,7 +414,13 @@ pub fn get_days(db: &Db, start: NaiveDate, viewing: Tz) -> Week {
             if rule.until.is_some_and(|u| date > u) {
                 continue;
             }
-            if !rule.days.iter().any(|c| c == code_for(date.weekday())) {
+            let fires = match rule.monthday {
+                // The 31st in a thirty-day month is that month's last day: a
+                // bill due on the 31st is still due in September.
+                Some(n) => date.day() == n.min(last_day_of_month(date)),
+                None => rule.days.iter().any(|c| c == code_for(date.weekday())),
+            };
+            if !fires {
                 continue;
             }
             if rule.except.contains(&date) {

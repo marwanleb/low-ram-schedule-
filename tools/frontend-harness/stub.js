@@ -151,12 +151,18 @@ window.__TAURI__ = {
     invoke: async (cmd, args) => {
       window.__calls.push({ cmd, args });
       console.log("[INVOKE]", cmd, JSON.stringify(args || {}));
+      // A check can stand in for any command without editing this file:
+      //   window.__override = { cmd_get_recurrence: () => ({ ...a rule... }) }
+      if (window.__override && window.__override[cmd]) return window.__override[cmd](args);
       switch (cmd) {
         case "cmd_get_week": return weekFrom(args && args.anchor);
         case "cmd_get_items": return items;
         case "cmd_active_session": return session;
         case "cmd_stats": return EMPTY ? { phrase: null, n: 0 } : { phrase: "about a third longer", n: 18 };
         case "cmd_data_version": return 1;
+        // The popup's time-zone picker iterates this; null crashed it whenever
+        // an item had a rule. The real backend always returns a list.
+        case "cmd_zones": return ["America/Chicago", "Europe/Paris", "Asia/Beirut"];
         // A rough stand-in for core::compose::line, enough to see the preview
         // assemble. The real one is Rust and round-trip tested against parse.
         case "cmd_compose": {
@@ -164,9 +170,10 @@ window.__TAURI__ = {
           const bits = [];
           if (f.priority) bits.push("!!");
           bits.push(f.title);
-          if (f.repeat && f.repeat.length) bits.push("every " + f.repeat.join(" "));
+          if (f.monthly) bits.push("monthly");
+          else if (f.repeat && f.repeat.length) bits.push("every " + f.repeat.join(" "));
           else if (f.date) bits.push(f.kind === "block" ? "on" : "due");
-          if (f.date && !(f.repeat && f.repeat.length)) {
+          if (f.date && (f.monthly || !(f.repeat && f.repeat.length))) {
             const [y, m, d] = f.date.split("-");
             bits.push(`${d}/${m}/${y}`);
           }

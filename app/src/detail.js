@@ -110,44 +110,72 @@ export async function openDetail(item, occurrenceDate, onChanged) {
 
   /* ── repeat ──────────────────────────────────────────────────────── */
   const repeatBox = el("div", "stack");
-  const repeatBtn = el("button", "wide" + (rule ? " danger" : ""));
-  repeatBtn.textContent = rule ? "STOP REPEATING" : "REPEAT WEEKLY";
-  repeatBtn.onclick = async () => {
-    if (rule) {
-      await invoke("cmd_set_recurrence", { itemId: item.id, byday: [], startTime: "09:00", endTime: "10:00" });
-    } else {
-      const d = occurrenceDate ? new Date(occurrenceDate + "T00:00:00") : new Date();
-      const day = WD[(d.getDay() + 6) % 7];
-      await invoke("cmd_set_recurrence", { itemId: item.id, byday: [day], startTime: "09:00", endTime: "10:00" });
-    }
+  // Where a new repeat is anchored: the occurrence clicked, else the item's own
+  // date, else today.
+  const anchorDate = occurrenceDate
+    ? new Date(occurrenceDate + "T00:00:00")
+    : item.due_at ? new Date(item.due_at) : new Date();
+  const setRule = (byday, monthday, start = "09:00", end = "10:00") =>
+    invoke("cmd_set_recurrence", { itemId: item.id, byday, startTime: start, endTime: end, monthday });
+  const toggled = async () => {
     await onChanged();
     openDetail({ ...item, recurs: !rule }, occurrenceDate, onChanged);
   };
-  repeatBox.append(repeatBtn);
 
   if (rule) {
-    const days = el("div", "dayRow");
-    WD.forEach((code, i) => {
-      const b = el("button", "dchip" + (rule.byday.includes(code) ? " on" : ""));
-      b.textContent = WD_LABEL[i];
-      b.onclick = async () => {
-        const next = rule.byday.includes(code)
-          ? rule.byday.filter((d) => d !== code)
-          : [...rule.byday, code];
-        await invoke("cmd_set_recurrence", {
-          itemId: item.id, byday: next,
-          startTime: rule.start_time, endTime: rule.end_time,
-        });
-        await onChanged();
-        openDetail(item, occurrenceDate, onChanged);
-      };
-      days.append(b);
-    });
-    repeatBox.append(days);
+    const stop = el("button", "wide danger");
+    stop.textContent = "STOP REPEATING";
+    stop.onclick = async () => { await setRule([], null); await toggled(); };
+    repeatBox.append(stop);
+  } else {
+    const choice = el("div", "repeatChoice");
+    const weekly = el("button", "wide");
+    weekly.textContent = "REPEAT WEEKLY";
+    weekly.onclick = async () => {
+      await setRule([WD[(anchorDate.getDay() + 6) % 7]], null);
+      await toggled();
+    };
+    const monthly = el("button", "wide");
+    monthly.textContent = "REPEAT MONTHLY";
+    monthly.title = `on the ${ordinal(anchorDate.getDate())} of each month`;
+    monthly.onclick = async () => {
+      await setRule([], anchorDate.getDate());
+      await toggled();
+    };
+    choice.append(weekly, monthly);
+    repeatBox.append(choice);
+  }
+
+  if (rule) {
+    if (rule.monthday) {
+      // A monthly rule has no weekdays to toggle; say which day it lands on.
+      repeatBox.append(el("div", "hint", `MONTHLY ON THE ${ordinal(rule.monthday).toUpperCase()}` +
+        (rule.monthday > 28 ? " — THE LAST DAY IN SHORTER MONTHS" : "")));
+    } else {
+      const days = el("div", "dayRow");
+      WD.forEach((code, i) => {
+        const b = el("button", "dchip" + (rule.byday.includes(code) ? " on" : ""));
+        b.textContent = WD_LABEL[i];
+        b.onclick = async () => {
+          const next = rule.byday.includes(code)
+            ? rule.byday.filter((d) => d !== code)
+            : [...rule.byday, code];
+          await invoke("cmd_set_recurrence", {
+            itemId: item.id, byday: next,
+            startTime: rule.start_time, endTime: rule.end_time, monthday: null,
+          });
+          await onChanged();
+          openDetail(item, occurrenceDate, onChanged);
+        };
+        days.append(b);
+      });
+      repeatBox.append(days);
+    }
 
     repeatBox.append(timeEditor(rule, async (start, end) => {
       await invoke("cmd_set_recurrence", {
         itemId: item.id, byday: rule.byday, startTime: start, endTime: end,
+        monthday: rule.monthday ?? null,
       });
       await onChanged();
       openDetail(item, occurrenceDate, onChanged);
@@ -200,6 +228,12 @@ export async function openDetail(item, occurrenceDate, onChanged) {
 }
 
 /* ── small builders ────────────────────────────────────────────────── */
+/** 1 → "1st", 22 → "22nd", 13 → "13th". */
+function ordinal(n) {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return `${n}${teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th"}`;
+}
+
 function field(label, control, stacked) {
   const row = el("div", stacked ? "fieldStacked" : "field");
   if (label) row.append(el("span", "fieldLabel", label));

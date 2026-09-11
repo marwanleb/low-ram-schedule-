@@ -76,6 +76,8 @@ in the title, so ordinary sentences are safe.
   repeating   every        (say it plainly; one weekday is enough)
               mondays      (the plural says it too)
               daily        (every day of the week)
+              monthly      (on its date's day each month; the 31st
+                            means the last day of a shorter month)
   estimate    ~2h · ~90m · ~1.5h
   tag         #math        (#work #life #body #social also set the colour)
   place       @Hall 2.106   (runs to the end of the line, spaces and all)
@@ -88,6 +90,7 @@ in the title, so ordinary sentences are safe.
 > PHYS201 every monday wednesday 10:30-12:00p @Hall 2.106
 > gym every mon wed fri ~1h #body
 > wake up daily 08:00 #floating
+> rent monthly 1 oct 9am
 > pick up a friend from the airport 2 Sep 2026 8:00 pm
 > dentist 14 october 9:30 am
 > lab report due wed by 11:59 pm

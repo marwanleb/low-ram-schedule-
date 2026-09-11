@@ -32,6 +32,9 @@ pub struct Fields {
     pub priority: bool,
     /// Weekday codes as the parser spells them: `mon`, `tue`, …
     pub repeat: Vec<String>,
+    /// Repeats on the date's day each month instead of on weekdays. Wins
+    /// over `repeat` if both are set, as the parser does.
+    pub monthly: bool,
     pub kind: Kind,
     pub date: Option<NaiveDate>,
     pub at: Option<NaiveTime>,
@@ -67,7 +70,9 @@ pub fn line(f: &Fields) -> String {
         }
     };
 
-    if !f.repeat.is_empty() {
+    if f.monthly {
+        push("monthly");
+    } else if !f.repeat.is_empty() {
         push(&format!("every {}", f.repeat.join(" ")));
     } else if f.date.is_some() {
         // Without a date there is nothing for "due"/"on" to attach to, and a
@@ -80,7 +85,9 @@ pub fn line(f: &Fields) -> String {
 
     // A repeat has no single date, and the parser drops one if given. Emitting
     // it anyway would put a date in the preview that silently does nothing.
-    if let (Some(date), true) = (f.date, f.repeat.is_empty()) {
+    // A monthly rule keeps its date: that is the day of the month it repeats
+    // on, and where it starts.
+    if let (Some(date), true) = (f.date, f.monthly || f.repeat.is_empty()) {
         // Day first, four-digit year: the one spelling the parser reads
         // unambiguously regardless of which number could be a month.
         push(&date.format("%d/%m/%Y").to_string());

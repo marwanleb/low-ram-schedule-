@@ -150,7 +150,9 @@ pub fn add_from_text_in(
         ],
     )?;
 
-    if p.repeats && !p.byday.is_empty() {
+    // A monthly rule has no weekdays; without the second half it would never
+    // be written, and the capture would silently lose its repeat.
+    if p.repeats && (!p.byday.is_empty() || p.monthday.is_some()) {
         let (start, end) = match p.span {
             Some((a, b)) => (a, b),
             // A repeat given only a point time still needs a span to occupy on
@@ -164,15 +166,17 @@ pub fn add_from_text_in(
         // `#floating` opts out and stores NULL. Spec 5.3.
         let tz = p.pinned.then(|| zone.name().to_string());
         db.conn.execute(
-            "INSERT INTO recurrence (item_id, byday, start_time, end_time, tz, from_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO recurrence (item_id, byday, start_time, end_time, tz, from_date, monthday)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 id,
                 p.byday.join(","),
                 start.format("%H:%M").to_string(),
                 end.format("%H:%M").to_string(),
                 tz,
-                today.format("%Y-%m-%d").to_string(),
+                // A monthly rule given a date starts there rather than today.
+                p.repeat_from.unwrap_or(today).format("%Y-%m-%d").to_string(),
+                p.monthday,
             ],
         )?;
     }

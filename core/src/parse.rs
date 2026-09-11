@@ -11,6 +11,10 @@ pub struct Parsed {
     /// Stated by the `every` keyword, never inferred from how many weekdays
     /// were typed. `math hw fri` is due Friday; `trash every tue` repeats.
     pub repeats: bool,
+    /// Day of the month for a monthly repeat; None otherwise.
+    pub monthday: Option<u32>,
+    /// Where a monthly repeat starts, when a date came with it.
+    pub repeat_from: Option<NaiveDate>,
     pub span: Option<(NaiveTime, NaiveTime)>,
     /// False when a time range was given: typing a span means scheduling, not
     /// listing. Spec 3.1.
@@ -51,6 +55,7 @@ enum Token {
     DayMonth(u32, u32),
     Every,
     Daily,
+    Monthly,
     Span(NaiveTime, NaiveTime),
     Tag(String),
     Zone { pinned: bool },
@@ -303,6 +308,12 @@ fn daily(t: &str) -> Option<Token> {
     (t == "daily" || t == "everyday").then_some(Token::Daily)
 }
 
+/// `monthly` repeats on a date's day of the month. The one word only: `month`
+/// on its own ends ordinary sentences ("the report for the month").
+fn monthly(t: &str) -> Option<Token> {
+    (t == "monthly").then_some(Token::Monthly)
+}
+
 /// Split a date on either separator, e.g. `9-02-2026` or `9/02/2026`.
 fn date_parts(t: &str) -> Option<(Vec<&str>, char)> {
     let sep = ['-', '/', '.'].into_iter().find(|c| t.contains(*c))?;
@@ -428,6 +439,7 @@ fn recognise(raw: &str) -> Option<Token> {
         .or_else(|| filler(&t))
         .or_else(|| every(&t))
         .or_else(|| daily(&t))
+        .or_else(|| monthly(&t))
         .or_else(|| relative(&t))
         .or_else(|| span(&t))
         .or_else(|| time(&t))
@@ -468,6 +480,7 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
     let mut byday: Vec<String> = Vec::new();
     let mut due: Option<NaiveDate> = None;
     let mut repeats = false;
+    let mut monthly = false;
     let mut span_at: Option<(NaiveTime, NaiveTime)> = None;
     let mut tags: Vec<String> = Vec::new();
     let mut pinned = true;
@@ -521,6 +534,10 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
             Token::Date(d) => due = Some(d),
             Token::DayMonth(d, m) => due = next_day_month(today, d, m),
             Token::Every => repeats = true,
+            Token::Monthly => {
+                repeats = true;
+                monthly = true;
+            }
             Token::Daily => {
                 repeats = true;
                 for code in DAY_CODES {
@@ -571,6 +588,16 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
     // A repeat has no single due date. Otherwise a lone weekday names the next
     // such day; several weekdays without `every` can only mean a repeat, so
     // they are treated as one.
+    // A monthly repeat lands on its date's day of the month and starts there;
+    // with no date, on today's. Weekdays alongside it contradict it, and the
+    // explicit cadence wins rather than leaving a rule that means neither.
+    let (monthday, repeat_from) = if monthly {
+        byday.clear();
+        (Some(due.unwrap_or(today).day()), due)
+    } else {
+        (None, None)
+    };
+
     if repeats || byday.len() > 1 {
         repeats = true;
         due = None;
@@ -588,6 +615,8 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
         byday,
         due,
         repeats,
+        monthday,
+        repeat_from,
         span: span_at,
         // A bare time range is a block and nothing else -- a class does not
         // belong in a to-do list. "on" is different: it says when something

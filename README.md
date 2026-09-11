@@ -148,6 +148,7 @@ math hw fri 5pm ~2h #math
 trash every tue 20:00
 MATH210 every mon wed 9:00-10:15 @Hall 1.204
 vitamins daily 08:00
+rent monthly 1 oct 9am
 !! renew parking tomorrow
 ```
 

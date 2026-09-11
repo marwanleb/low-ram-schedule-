@@ -75,7 +75,9 @@ impl Db {
               tz         TEXT,
               from_date  TEXT NOT NULL,
               until_date TEXT,
-              except_on  TEXT NOT NULL DEFAULT ''
+              except_on  TEXT NOT NULL DEFAULT '',
+              -- Day of the month for a monthly rule; NULL for a weekly one.
+              monthday   INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS placements (
@@ -148,6 +150,7 @@ impl Db {
             ("recurrence", "tz", "TEXT"),
             ("recurrence", "until_date", "TEXT"),
             ("recurrence", "except_on", "TEXT NOT NULL DEFAULT ''"),
+            ("recurrence", "monthday", "INTEGER"),
             ("placements", "moved_from", "TEXT"),
             ("sessions", "placement_id", "TEXT"),
             ("sessions", "discarded", "INTEGER NOT NULL DEFAULT 0"),

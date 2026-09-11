@@ -181,7 +181,10 @@ fn is_cancel(t: &str) -> bool {
 /// starts and how long it runs, so neither is asked for again.
 fn next_slot(p: &ms_core::Parsed, skipped: &[Slot]) -> Option<Slot> {
     let want = |s: Slot| !skipped.contains(&s);
-    if p.due.is_none() && !p.repeats && want(Slot::Date) {
+    // A monthly repeat with no date would fall back to today's day of the
+    // month. Asking is cheap, and that is usually not the day that was meant.
+    let undated_month = p.monthday.is_some() && p.repeat_from.is_none();
+    if ((p.due.is_none() && !p.repeats) || undated_month) && want(Slot::Date) {
         return Some(Slot::Date);
     }
     if p.at.is_none() && p.span.is_none() && want(Slot::Time) {
@@ -198,7 +201,11 @@ fn next_slot(p: &ms_core::Parsed, skipped: &[Slot]) -> Option<Slot> {
 /// Did the answer actually supply the thing that was asked for?
 fn slot_filled(p: &ms_core::Parsed, slot: Slot) -> bool {
     match slot {
-        Slot::Date => p.due.is_some() || p.repeats,
+        // For a monthly repeat only a real date answers it: `repeats` is
+        // already true before one is given.
+        Slot::Date => {
+            p.due.is_some() || p.repeat_from.is_some() || (p.repeats && p.monthday.is_none())
+        }
         Slot::Time => p.at.is_some() || p.span.is_some(),
         Slot::Length => p.estimate_min.is_some() || p.span.is_some(),
     }
@@ -648,5 +655,25 @@ mod tests {
         let said = talk(&db, &["help", "list"]);
         assert!(said[0].contains("Type what you want"), "{:?}", said[0]);
         assert!(!said[1].contains("when?"), "list is not a capture: {:?}", said[1]);
+    }
+
+    #[test]
+    fn a_monthly_repeat_is_asked_which_day() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["pay rent monthly", "1 oct", "-"]);
+        assert!(said[0].contains("when"), "{:?}", said[0]);
+        assert!(said[1].contains("time"), "{:?}", said[1]);
+        assert!(said[2].starts_with("added"), "{:?}", said[2]);
+        let items = get_items(&db, &Filter::default());
+        assert_eq!(items.len(), 1);
+        assert!(items[0].recurs, "it repeats");
+    }
+
+    #[test]
+    fn skipping_the_day_of_a_monthly_repeat_still_files_it() {
+        let db = Db::open_in_memory().unwrap();
+        let said = talk(&db, &["pay rent monthly", "-", "-"]);
+        assert!(said[2].starts_with("added"), "{:?}", said[2]);
+        assert!(get_items(&db, &Filter::default())[0].recurs);
     }
 }

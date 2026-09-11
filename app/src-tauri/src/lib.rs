@@ -391,6 +391,8 @@ pub struct RecurrenceDto {
     end_time: String,
     tz: Option<String>,
     except_on: Vec<String>,
+    /// Day of the month for a monthly rule; None for a weekly one.
+    monthday: Option<u32>,
 }
 
 #[tauri::command]
@@ -400,7 +402,7 @@ fn cmd_get_recurrence(
 ) -> Result<Option<RecurrenceDto>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let row = db.conn.query_row(
-        "SELECT byday, start_time, end_time, tz, except_on FROM recurrence WHERE item_id = ?1",
+        "SELECT byday, start_time, end_time, tz, except_on, monthday FROM recurrence WHERE item_id = ?1",
         rusqlite::params![item_id],
         |r| {
             Ok((
@@ -409,15 +411,17 @@ fn cmd_get_recurrence(
                 r.get::<_, String>(2)?,
                 r.get::<_, Option<String>>(3)?,
                 r.get::<_, String>(4)?,
+                r.get::<_, Option<u32>>(5)?,
             ))
         },
     );
-    Ok(row.ok().map(|(byday, start_time, end_time, tz, except)| RecurrenceDto {
+    Ok(row.ok().map(|(byday, start_time, end_time, tz, except, monthday)| RecurrenceDto {
         byday: byday.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect(),
         start_time,
         end_time,
         tz,
         except_on: except.split(',').filter(|s| !s.trim().is_empty()).map(|s| s.trim().to_string()).collect(),
+        monthday,
     }))
 }
 
@@ -428,10 +432,11 @@ fn cmd_set_recurrence(
     byday: Vec<String>,
     start_time: String,
     end_time: String,
+    monthday: Option<u32>,
 ) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let today = Local::now().date_naive();
-    if byday.is_empty() {
+    if byday.is_empty() && monthday.is_none() {
         db.conn
             .execute("DELETE FROM recurrence WHERE item_id = ?1", rusqlite::params![item_id])
             .map_err(|e| e.to_string())?;
@@ -441,16 +446,17 @@ fn cmd_set_recurrence(
     let tz = store::local_zone().name().to_string();
     db.conn
         .execute(
-            "INSERT INTO recurrence (item_id, byday, start_time, end_time, tz, from_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(item_id) DO UPDATE SET byday = ?2, start_time = ?3, end_time = ?4",
+            "INSERT INTO recurrence (item_id, byday, start_time, end_time, tz, from_date, monthday)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(item_id) DO UPDATE SET byday = ?2, start_time = ?3, end_time = ?4, monthday = ?7",
             rusqlite::params![
                 item_id,
                 byday.join(","),
                 start_time,
                 end_time,
                 tz,
-                today.to_string()
+                today.to_string(),
+                monthday
             ],
         )
         .map_err(|e| e.to_string())?;

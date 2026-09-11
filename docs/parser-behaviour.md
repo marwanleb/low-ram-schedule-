@@ -83,6 +83,7 @@ regardless of order.
 | `x 2nd September` | due=2026-09-02 | ordinal |
 | `x 1 oct 9am` | due=2026-10-01, at=09:00 | a time after a written date |
 | `x oct 1 9am` | due=2026-10-01, at=09:00 | either order |
+| `rent monthly 1 oct 9am` | title=rent, repeats=true, at=09:00 | the help's own example |
 
 ### Times
 
@@ -109,6 +110,8 @@ Recurrence is **stated**, never inferred from the shape of the line.
 | `x every tue` | repeats=true | the keyword |
 | `x weekly tue` | repeats=true | synonym |
 | `x daily` | repeats=true, byday=7 | every day |
+| `rent monthly 1/10/2026` | repeats=true, byday=0, due=none | the date's day, every month |
+| `x monthly` | repeats=true, byday=0 | today's day of the month |
 | `x mondays` | repeats=true | the plural says it |
 | `gym every mon wed fri ~1h` | title=gym, repeats=true, byday=3 | |
 | `gym mon/wed/fri 6am` | title=gym, byday=3 | slashes |
@@ -171,6 +174,7 @@ than one that grabs too little, because the mistake is invisible.
 | `meet Sarah about the March report` | title=<same> | "March" is a month |
 | `buy milk for tomorrow's breakfast` | title=<same> | "tomorrow's" |
 | `read the daily news` | title=<same> | "daily" |
+| `read the monthly report` | title=<same> | "monthly" |
 | `water the plants every day` | title=<same> | "every" |
 | `finish the essay in March` | due=none | a month with no day is not a date |
 | `x September` | title=<same> | nor on its own |

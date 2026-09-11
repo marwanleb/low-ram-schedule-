@@ -18,6 +18,8 @@ Useful in the page console:
 ```js
 window.__calls        // every invoke, in order, with its arguments
 window.__state        // the app's own state object
+window.__override = { cmd_get_recurrence: () => ({ ... }) }
+                      // stand in for any command's reply
 ```
 
 The stub serves an invented term — a few courses, a gym habit, a to-do list

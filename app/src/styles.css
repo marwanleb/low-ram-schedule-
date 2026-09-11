@@ -551,6 +551,10 @@ main {
   cursor: pointer;
 }
 .ffDays button.on { color: var(--page); background: var(--cyan); border-color: var(--cyan); }
+.ffDays .ffMonthly { flex: 0 0 auto; padding: 6px 7px; }
+/* the detail popup offers both cadences side by side */
+.repeatChoice { display: flex; gap: 6px; }
+.repeatChoice button { flex: 1; }
 
 .ffFoot { display: flex; align-items: center; gap: 10px; }
 .ffPreview {
