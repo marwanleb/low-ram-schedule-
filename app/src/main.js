@@ -282,7 +282,7 @@ function renderWeek() {
       grip.title = "drag to change how long";
       ev.appendChild(grip);
 
-      makeBlockDraggable(ev, grip, p, day.date, offsets, hours, heightOf);
+      makeBlockDraggable(ev, grip, p, day.date, hours, heightOf);
       col.appendChild(ev);
     }
 
@@ -902,7 +902,7 @@ function minutesAt(y, colTop, hours, heightOf) {
   return last * 60 + 59;
 }
 
-function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
+function makeBlockDraggable(ev, grip, p, date, hours, heightOf) {
   ev.style.touchAction = "none";
 
   ev.addEventListener("pointerdown", (e) => {
@@ -930,24 +930,16 @@ function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
       lastX = mv.clientX;
       lastY = mv.clientY;
 
-      if (!resizing) {
-        // Follow the pointer exactly, across days as well as hours. Nothing
-        // snaps until release; the column it will land in is highlighted.
-        ev.style.transform = `translate(${mv.clientX - startX}px, ${mv.clientY - startY}px)`;
-        highlight(hitTest(mv.clientX, mv.clientY));
+      if (resizing) {
+        // The bottom edge follows the pointer exactly; the length snaps on
+        // release, the same way a move does.
+        ev.style.height = `${Math.max(18, startRect.height + (mv.clientY - startY))}px`;
         return;
       }
-
-      const colTop = col.getBoundingClientRect().top;
-      const atCursor = minutesAt(mv.clientY, colTop, hours, heightOf);
-      const end = Math.max(startMin + MIN_BLOCK_MIN, snap(atCursor));
-      latest = { startMin, endMin: Math.min(end, 24 * 60), date };
-      // Preview in place: the pixel maths is the same as the renderer's.
-      const topPx = offsets[Math.floor(latest.startMin / 60)];
-      if (topPx !== undefined) {
-        ev.style.top = `${topPx + (latest.startMin % 60) / 60 * heightOf(Math.floor(latest.startMin / 60))}px`;
-        ev.style.height = `${Math.max(18, ((latest.endMin - latest.startMin) / 60) * ROW_H)}px`;
-      }
+      // Follow the pointer exactly, across days as well as hours. Nothing
+      // snaps until release; the column it will land in is highlighted.
+      ev.style.transform = `translate(${mv.clientX - startX}px, ${mv.clientY - startY}px)`;
+      highlight(hitTest(mv.clientX, mv.clientY));
     };
 
     const up = async (mv) => {
@@ -961,11 +953,18 @@ function makeBlockDraggable(ev, grip, p, date, offsets, hours, heightOf) {
         setTimeout(() => delete ev.dataset.dragged, 0);
       }
       if (!dragging) return;
+      lastX = mv.clientX ?? lastX;
+      lastY = mv.clientY ?? lastY;
 
-      if (!resizing) {
+      if (resizing) {
+        // Where the bottom edge was let go decides the end, snapped now rather
+        // than while pulling.
+        const colTop = col.getBoundingClientRect().top;
+        const bottomEdge = startRect.bottom + (lastY - startY);
+        const end = Math.max(startMin + MIN_BLOCK_MIN, snap(minutesAt(bottomEdge, colTop, hours, heightOf)));
+        latest = { startMin, endMin: Math.min(end, 24 * 60), date };
+      } else {
         highlight(null);
-        lastX = mv.clientX ?? lastX;
-        lastY = mv.clientY ?? lastY;
         const hit = hitTest(lastX, lastY);
         if (!hit) {
           // Let go outside every column: put it back rather than guess a day.
