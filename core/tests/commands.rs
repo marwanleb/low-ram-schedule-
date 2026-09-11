@@ -136,3 +136,28 @@ fn list_inside_a_task_does_not_trigger() {
     };
     assert_eq!(p.title, "list the christmas presents");
 }
+
+/// Every example in the help must be understood completely: no word left in
+/// its title reads as a detail on its own. Checking only that something was
+/// recognised let "rent monthly 1 oct 9am" through while it filed a task
+/// called "rent monthly 1" with no repeat -- and re-reading the whole title
+/// misses it too, because the stranded "monthly" is not the last word. So
+/// every prefix of the title is re-read, which puts each word at the end once.
+#[test]
+fn every_help_example_is_understood_completely() {
+    let today = chrono::NaiveDate::from_ymd_opt(2026, 8, 31).unwrap();
+    for line in ms_core::help_text().lines() {
+        let Some(example) = line.strip_prefix("> ") else { continue };
+        let title = ms_core::parse(example, today).title;
+        let words: Vec<&str> = title.split_whitespace().collect();
+        for k in 1..=words.len() {
+            let prefix = words[..k].join(" ");
+            let again = ms_core::parse(&prefix, today);
+            assert!(
+                again.consumed.is_empty(),
+                "{example:?} left detail in its title {title:?}: {prefix:?} still reads {:?}",
+                again.consumed
+            );
+        }
+    }
+}

@@ -81,6 +81,8 @@ regardless of order.
 | `x Sep 2` | due=2026-09-02 | either order |
 | `x September 2, 2026` | due=2026-09-02 | with a comma |
 | `x 2nd September` | due=2026-09-02 | ordinal |
+| `x 1 oct 9am` | due=2026-10-01, at=09:00 | a time after a written date |
+| `x oct 1 9am` | due=2026-10-01, at=09:00 | either order |
 
 ### Times
 
@@ -172,7 +174,10 @@ than one that grabs too little, because the mistake is invisible.
 | `water the plants every day` | title=<same> | "every" |
 | `finish the essay in March` | due=none | a month with no day is not a date |
 | `x September` | title=<same> | nor on its own |
-| `think about it` | title=<same> | ends in a filler word |
+| `think about it` | title=<same> | ends in a preposition |
+| `meet him by` | title=<same> | ends in a filler word |
+| `email the notes I got from` | title=<same> | |
+| `essay due` | title=<same> | "due" with nothing to be due |
 | `the thing to do` | title=<same> | |
 
 ### Numbers that are not dates or times

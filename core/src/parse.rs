@@ -183,9 +183,12 @@ fn month_of(t: &str) -> Option<u32> {
 
 /// A day number, with or without an ordinal suffix: `2`, `2nd`, `23rd`.
 fn day_of(t: &str) -> Option<u32> {
-    let core = t.trim_end_matches(|c: char| c.is_ascii_alphabetic() || c == ',');
+    let t = t.trim_end_matches(',');
+    // Only an ordinal may follow the number. Stripping any trailing letters at
+    // all read "9am" as the 9th, so "1 oct 9am" became October 9 with no time.
+    let core = ["st", "nd", "rd", "th"].iter().find_map(|s| t.strip_suffix(s)).unwrap_or(t);
     // Two digits at most: a four-digit number is a year, not a day.
-    if core.is_empty() || core.len() > 2 {
+    if core.is_empty() || core.len() > 2 || !core.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
     let n: u32 = core.parse().ok()?;
@@ -471,6 +474,7 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
     let mut said_due = false;
     let mut said_on = false;
     let mut end = words.len();
+    let mut seen_detail = false;
 
     while end > 0 {
         // Longest window first, so "Sep 2" beats a lone "2".
@@ -482,6 +486,14 @@ pub fn parse(input: &str, today: NaiveDate) -> Parsed {
             }
         }
         let Some((len, token)) = hit else { break };
+        // A filler only means something between a title and its details. With
+        // nothing recognised to its right it is just the last word of a
+        // sentence -- "meet him by" -- and consuming it would lose the word.
+        let is_filler = matches!(&token, Token::Filler | Token::Due | Token::On);
+        if is_filler && !seen_detail {
+            break;
+        }
+        seen_detail |= !is_filler;
         match token {
             // Scanning right-to-left, so a repeated token of the same kind
             // leaves the leftmost value in place.

@@ -564,3 +564,33 @@ fn a_span_is_still_a_block_without_the_keyword() {
     let p = parse("MATH210 every mon 9:00-10:15", today());
     assert!(!p.listed);
 }
+
+/// "1 oct 9am" once read as October 9th with no time: the day check accepted
+/// any trailing letters as an ordinal, so "9am" counted as the 9th.
+#[test]
+fn a_time_after_a_written_date_is_a_time_not_a_day() {
+    let hhmm = |p: &ms_core::Parsed| p.at.map(|t| t.format("%H:%M").to_string());
+    for line in ["dentist 1 oct 9am", "dentist oct 1 9am"] {
+        let p = parse(line, today());
+        assert_eq!(p.title, "dentist", "{line:?}");
+        assert_eq!(p.due, Some(ymd(2026, 10, 1)), "{line:?}");
+        assert_eq!(hhmm(&p), Some("09:00".into()), "{line:?}");
+    }
+    // Ordinals and the comma before a year still read as days.
+    assert_eq!(parse("x 2nd September", today()).due, Some(ymd(2026, 9, 2)));
+    assert_eq!(parse("x September 2, 2026", today()).due, Some(ymd(2026, 9, 2)));
+}
+
+/// A filler at the very end has nothing to introduce, so it is part of the
+/// sentence. Eating it lost the word: "meet him by" became "meet him".
+#[test]
+fn a_trailing_filler_word_is_kept() {
+    for line in ["meet him by", "email the notes I got from", "x at", "essay due", "the talk is on"] {
+        let p = parse(line, today());
+        assert_eq!(p.title, line, "nothing may be lost from {line:?}");
+        assert!(p.consumed.is_empty(), "{line:?} consumed {:?}", p.consumed);
+    }
+    // Between a title and its details a filler still does its job.
+    assert_eq!(parse("lunch at noon monday", today()).title, "lunch");
+    assert_eq!(parse("essay due friday", today()).title, "essay");
+}
