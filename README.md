@@ -33,7 +33,7 @@ longer or shorter by their bottom edge. Dragging one occurrence of a repeating
 class moves **only that week** — the series is left alone, and restoring the
 date removes the moved copy so the class never appears twice.
 
-![Typing into an empty Saturday afternoon](docs/screenshots/add-in-an-hour.png)
+![Clicking an empty hour opens the fields with its date and time filled in](docs/screenshots/add-in-an-hour.png)
 
 Screenshots are of invented data, produced by
 [`tools/frontend-harness`](tools/frontend-harness) rather than anyone's real week.

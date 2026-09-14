@@ -10,14 +10,19 @@
 
 const EMPTY = new URLSearchParams(location.search).has("empty");
 
-// A Monday, so the week starts where the app starts it.
-const MONDAY = "2026-09-07";
+// Everything is placed against the real week, so the fixture looks the same
+// whenever it is run: classes on their weekdays, everything else around today.
+const NOW = new Date();
+const MON = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - ((NOW.getDay() + 6) % 7));
+/** Today's offset from that Monday. */
+const T = (NOW.getDay() + 6) % 7;
+const MONDAY = `${MON.getFullYear()}-${String(MON.getMonth() + 1).padStart(2, "0")}-${String(MON.getDate()).padStart(2, "0")}`;
 const iso = (offset) => {
-  const d = new Date(2026, 8, 7 + offset);
+  const d = new Date(MON.getFullYear(), MON.getMonth(), MON.getDate() + offset);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-// Chicago is UTC-5 in September; the frontend renders whatever offset it is given.
-const at = (offset, hhmm) => `${iso(offset)}T${hhmm}:00-05:00`;
+// Local wall-clock times with no offset, so they read the same in any season.
+const at = (offset, hhmm) => `${iso(offset)}T${hhmm}:00`;
 
 let seq = 0;
 const uid = (p) => `${p}_${(++seq).toString().padStart(4, "0")}`;
@@ -37,7 +42,7 @@ function itemFor(id, title, category, place, recurs, estimate_min) {
 /** A class: the same item placed on several days. */
 function course(title, days, start, end, place, category) {
   const id = itemFor(uid("itm"), title, category, place, true, null);
-  return days.map((d) => ({
+  return days.flatMap((d) => [d, d + 7]).map((d) => ({
     id: `plc_${iso(d)}_${id}`,
     item_id: id,
     title,
@@ -76,10 +81,10 @@ const blocks = EMPTY ? [] : [
   ...course("MATH210", [0, 2, 4], "09:00", "10:00", "Hall 1.204", "work"),
   ...course("STAT240 lab", [3], "14:00", "17:00", "Lab 3.210", "work"),
   ...course("gym", [1, 3, 4], "07:00", "08:00", null, "body"),
-  ...oneOff("coffee with Sam", 1, "15:00", "16:00", "the corner cafe", "social"),
-  ...oneOff("dentist", 2, "16:30", "17:15", null, "life"),
-  ...oneOff("dinner at Ana's", 4, "19:00", "21:00", null, "social"),
-  ...oneOff("seminar reading", 1, "20:00", "21:30", null, "work"),
+  ...oneOff("coffee with Sam", T + 1, "15:00", "16:00", "the corner cafe", "social"),
+  ...oneOff("dentist", T + 2, "16:30", "17:15", null, "life"),
+  ...oneOff("dinner at Ana's", T + 3, "19:00", "21:00", null, "social"),
+  ...oneOff("seminar reading", T, "20:00", "21:30", null, "work"),
 ];
 
 /** Seven days from whatever start the app asks for, as the real backend does. */
@@ -116,18 +121,18 @@ function todo(title, dueOffset, dueTime, opts = {}) {
   };
 }
 
-// "Today" in these screenshots is Tuesday 8 September.
+// Due dates sit around today, so every bucket and both chip styles appear.
 const todos = EMPTY ? [] : [
-  todo("PHYS201 problem set 4", 1, "23:59", { estimate_min: 120, category: "work", spent_sec: 2700 }),
-  todo("pay the phone bill", 1, "18:00", { category: "life" }),
-  todo("email the lab about lost keys", 1, "17:00", { estimate_min: 15, category: "work", done: true }),
-  todo("MATH210 quiz 3", 2, "23:59", { estimate_min: 60, category: "work" }),
-  todo("draft the internship email", 3, "12:00", { estimate_min: 30, category: "work" }),
-  todo("return the library books", 4, "17:00", { category: "life" }),
-  todo("farmers market", 5, "10:00", { category: "life" }),
-  todo("call home", 5, "18:00", { estimate_min: 30, category: "social" }),
-  todo("book flights home", 6, "23:59", { estimate_min: 45, category: "life" }),
-  todo("renew passport", 30, "12:00", { category: "life" }),
+  todo("PHYS201 problem set 4", T, "23:59", { estimate_min: 120, category: "work", spent_sec: 2700 }),
+  todo("pay the phone bill", T, "18:00", { category: "life" }),
+  todo("email the lab about lost keys", T, "17:00", { estimate_min: 15, category: "work", done: true }),
+  todo("MATH210 quiz 3", T + 1, "23:59", { estimate_min: 60, category: "work" }),
+  todo("draft the internship email", T + 2, "12:00", { estimate_min: 30, category: "work" }),
+  todo("return the library books", T + 3, "17:00", { category: "life" }),
+  todo("farmers market", T + 4, "10:00", { category: "life" }),
+  todo("call home", T + 4, "18:00", { estimate_min: 30, category: "social" }),
+  todo("book flights home", T + 5, "23:59", { estimate_min: 45, category: "life" }),
+  todo("renew passport", T + 27, "12:00", { category: "life" }),
   todo("renew parking", null, null, { category: "life" }),
   todo("fix the bike", null, null, { estimate_min: 90, category: "body" }),
   todo("start the reading list", null, null, {}),
