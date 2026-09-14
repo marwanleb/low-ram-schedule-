@@ -348,14 +348,33 @@ function placeNowLine() {
   }
   y += (now.getMinutes() / 60) * today.heightOf(now.getHours());
 
-  const line = existing || Object.assign(document.createElement("div"), { id: "nowLine", className: "nowLine" });
+  let line = existing;
+  if (!line) {
+    line = Object.assign(document.createElement("div"), { id: "nowLine", className: "nowLine" });
+    line.append(Object.assign(document.createElement("span"), { className: "nowTime" }));
+  }
   if (line.parentElement !== inner) inner.appendChild(line);
-  // From the columns themselves: today's is wider, so no fixed offset is right.
+  const pad = (n) => String(n).padStart(2, "0");
+  line.firstElementChild.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  // From the first day column -- measured, since today's is wider -- to the
+  // inner edge of the scrolling box, past the last column and the grid's
+  // padding, so it reaches the side of the pane instead of stopping short.
+  // Floored: a fractional pixel of overflow would make the grid scroll sideways.
   const first = zones[0].col;
-  const last = zones[zones.length - 1].col;
+  const box = inner.parentElement;
+  const start = inner.getBoundingClientRect().left + first.offsetLeft;
+  const end = box.getBoundingClientRect().left + box.clientLeft + box.clientWidth;
   line.style.top = `${first.offsetTop + y}px`;
   line.style.left = `${first.offsetLeft}px`;
-  line.style.width = `${last.offsetLeft + last.offsetWidth - first.offsetLeft}px`;
+  line.style.width = `${Math.floor(end - start)}px`;
+}
+
+/** Moves the line and its clock on the minute, not merely once a minute: a
+ *  clock up to 59 seconds behind reads as wrong. */
+function tickNowLine() {
+  placeNowLine();
+  const now = new Date();
+  setTimeout(tickNowLine, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 20);
 }
 
 /** Buckets are derived from the due date, never stored — otherwise "today"
@@ -569,7 +588,6 @@ setInterval(tickTimer, 1000);
 // hour passing. Re-renders only when something has actually aged out.
 setInterval(() => {
   if (!state.week) return;
-  placeNowLine();
   // Midnight passed with the window open: roll it on by a day.
   if (state.following && state.anchor !== rollingStart()) {
     refresh();
@@ -1212,6 +1230,7 @@ document.addEventListener("visibilitychange", () => {
 /* ── go ────────────────────────────────────────────────────────────── */
 state.anchor = rollingStart();
 startSky(document.getElementById("sky"));
+tickNowLine();
 refresh().catch((e) => {
   document.body.insertAdjacentHTML(
     "afterbegin",
