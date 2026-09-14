@@ -324,6 +324,38 @@ function renderWeek() {
   }));
 
   $("blockCount").textContent = `${blocks} block${blocks === 1 ? "" : "s"}`;
+  placeNowLine();
+}
+
+/** A gold line across the week at the current time, while today is on screen.
+ *  Placed from the same row geometry as the blocks, and moved by the minute
+ *  sweep below rather than by re-rendering the grid. */
+function placeNowLine() {
+  const zones = state.dropZones || [];
+  const today = zones.find((z) => z.date === iso(new Date()));
+  const inner = zones[0] && zones[0].col.parentElement;
+  const existing = document.getElementById("nowLine");
+  const now = new Date();
+  // Nothing to show when today is not in view, or the hour is outside the rows.
+  if (!today || !inner || !today.hours.includes(now.getHours())) {
+    existing?.remove();
+    return;
+  }
+  let y = 0;
+  for (const h of today.hours) {
+    if (h === now.getHours()) break;
+    y += today.heightOf(h);
+  }
+  y += (now.getMinutes() / 60) * today.heightOf(now.getHours());
+
+  const line = existing || Object.assign(document.createElement("div"), { id: "nowLine", className: "nowLine" });
+  if (line.parentElement !== inner) inner.appendChild(line);
+  // From the columns themselves: today's is wider, so no fixed offset is right.
+  const first = zones[0].col;
+  const last = zones[zones.length - 1].col;
+  line.style.top = `${first.offsetTop + y}px`;
+  line.style.left = `${first.offsetLeft}px`;
+  line.style.width = `${last.offsetLeft + last.offsetWidth - first.offsetLeft}px`;
 }
 
 /** Buckets are derived from the due date, never stored — otherwise "today"
@@ -537,6 +569,7 @@ setInterval(tickTimer, 1000);
 // hour passing. Re-renders only when something has actually aged out.
 setInterval(() => {
   if (!state.week) return;
+  placeNowLine();
   // Midnight passed with the window open: roll it on by a day.
   if (state.following && state.anchor !== rollingStart()) {
     refresh();
