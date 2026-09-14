@@ -12,6 +12,7 @@
 //! `core/tests/compose.rs` asserts `parse(line(f)) == f` over fixed and
 //! generated cases, which is what keeps the two directions honest.
 
+use crate::clock::time12;
 use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 
@@ -94,9 +95,11 @@ pub fn line(f: &Fields) -> String {
     }
 
     if let Some(at) = f.at {
+        // 12-hour, as shown everywhere else. A range spells out both
+        // meridiems -- "2pm-5pm" -- so neither end depends on the other.
         match f.span_end {
-            Some(end) => push(&format!("{}-{}", at.format("%H:%M"), end.format("%H:%M"))),
-            None => push(&at.format("%H:%M").to_string()),
+            Some(end) => push(&format!("{}-{}", time12(at), time12(end))),
+            None => push(&time12(at)),
         }
     }
 

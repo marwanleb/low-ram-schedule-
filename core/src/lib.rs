@@ -2,6 +2,7 @@ pub mod db;
 pub mod expand;
 pub mod model;
 pub mod notify;
+pub mod clock;
 pub mod command;
 pub mod compose;
 pub mod import;
@@ -10,6 +11,7 @@ pub mod stats;
 pub mod store;
 pub mod timer;
 
+pub use clock::{range12, time12};
 pub use db::Db;
 pub use expand::{get_days, get_week};
 pub use command::{help_text, interpret, Command, ListScope};

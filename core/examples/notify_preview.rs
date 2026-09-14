@@ -34,7 +34,14 @@ fn main() {
     };
 
     let zone = ms_core::local_zone();
-    println!("{}\n{} \u{2014} next {lead} min from {}\n", path.display(), zone.name(), now.with_timezone(&zone).format("%a %d %b %H:%M"));
+    let here = now.with_timezone(&zone);
+    println!(
+        "{}\n{} \u{2014} next {lead} min from {} {}\n",
+        path.display(),
+        zone.name(),
+        here.format("%a %d %b"),
+        ms_core::time12(here.time())
+    );
 
     let out = ms_core::due_soon(&db, now, Duration::minutes(lead), zone);
     if out.is_empty() {
@@ -42,15 +49,15 @@ fn main() {
     }
     for n in &out {
         let mins = ((n.at - now).num_seconds() as f64 / 60.0).ceil() as i64;
-        let ends = n
-            .ends
-            .map(|e| format!("-{}", e.with_timezone(&zone).format("%H:%M")))
-            .unwrap_or_default();
+        let starts = n.at.with_timezone(&zone).time();
+        let when = match n.ends {
+            Some(e) => ms_core::range12(starts, e.with_timezone(&zone).time()),
+            None => ms_core::time12(starts),
+        };
         println!(
-            "{:>3} min  {}{}  {}{}   [{}]",
+            "{:>3} min  {:<15} {}{}   [{}]",
             mins,
-            n.at.with_timezone(&zone).format("%H:%M"),
-            ends,
+            when,
             n.title,
             n.location.as_deref().map(|l| format!(" @{l}")).unwrap_or_default(),
             n.key

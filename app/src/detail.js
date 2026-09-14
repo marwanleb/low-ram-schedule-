@@ -1,3 +1,4 @@
+import { rangeHHMM } from "./clock.js";
 /**
  * The item detail sheet: everything you can change about one item without
  * opening a terminal — estimate, whether it shows in the list, whether it
@@ -43,7 +44,7 @@ export async function openDetail(item, occurrenceDate, onChanged) {
   body.append(el("h2", "detailTitle", item.title));
 
   const when = rule
-    ? `${rule.start_time}–${rule.end_time} · ${rule.byday.map((d) => d.toUpperCase()).join(" ")}`
+    ? `${rangeHHMM(rule.start_time, rule.end_time)} · ${rule.byday.map((d) => d.toUpperCase()).join(" ")}`
     : item.due_at
       ? `due ${new Date(item.due_at).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
       : "no date, no time";
@@ -260,7 +261,7 @@ function timeEditor(rule, onSet) {
     t = ((t % 1440) + 1440) % 1440;
     return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   };
-  const label = el("span", "sval", `${rule.start_time}–${rule.end_time}`);
+  const label = el("span", "sval", rangeHHMM(rule.start_time, rule.end_time));
   const earlier = el("button", "sbtn", "−");
   const later = el("button", "sbtn", "+");
   const shorter = el("button", "sbtn", "−LEN");

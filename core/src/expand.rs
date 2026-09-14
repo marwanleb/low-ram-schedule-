@@ -141,10 +141,9 @@ fn place(
         for e in &ends {
             if *e - *s == written {
                 let note = (starts.len() > 1 || ends.len() > 1).then(|| format!(
-                    "{} {}-{} falls in a clock change in {}; kept at {}",
+                    "{} {} falls in a clock change in {}; kept at {}",
                     date,
-                    start.format("%H:%M"),
-                    end.format("%H:%M"),
+                    crate::clock::range12(start, end),
                     zone.name(),
                     format_args!("{} minutes", written.num_minutes())
                 ));
@@ -163,9 +162,9 @@ fn place(
         note: Some(format!(
             "{} {} does not exist in {} (clocks skip forward) — moved to {}",
             date,
-            start.format("%H:%M"),
+            crate::clock::time12(start),
             zone.name(),
-            s.format("%H:%M")
+            crate::clock::time12(s.time())
         )),
     })
 }
@@ -222,7 +221,7 @@ fn validate(raw: RawRule, viewing: Tz, diags: &mut Vec<Diagnostic>) -> Option<Ru
     if end <= start {
         warn(diags, &id, format!(
             "Recurrence skipped: end {} is not after start {}",
-            raw.end_time, raw.start_time
+            crate::clock::time12(end), crate::clock::time12(start)
         ));
         return None;
     }
@@ -429,7 +428,7 @@ pub fn get_days(db: &Db, start: NaiveDate, viewing: Tz) -> Week {
             let Some(landed) = place(rule.zone, date, rule.start, rule.end) else {
                 warn(&mut diagnostics, &rule.item_id, format!(
                     "Could not place {} {} in {} — occurrence skipped",
-                    date, rule.start.format("%H:%M"), rule.zone.name()
+                    date, crate::clock::time12(rule.start), rule.zone.name()
                 ));
                 continue;
             };

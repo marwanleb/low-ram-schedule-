@@ -1,5 +1,6 @@
 import { startSky } from "./sky.js";
 import { openDetail, zoneLabel } from "./detail.js";
+import { rangeHHMM, rangeOf, time12 } from "./clock.js";
 
 const invoke = window.__TAURI__.core.invoke;
 
@@ -48,11 +49,6 @@ const rollingStart = () => {
 };
 const WD = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-
-function hhmm(rfc) {
-  const d = new Date(rfc);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 function fmtDur(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -269,7 +265,7 @@ function renderWeek() {
       const place = p.location ? `<span class="place">${escapeHtml(p.location)}</span>` : "";
       ev.innerHTML =
         `<span class="t">${escapeHtml(p.title)}</span>` +
-        `<span class="h" style="color:${color}">${hhmm(p.starts_at)}&ndash;${hhmm(p.ends_at)}${rep}${zone}${place}</span>`;
+        `<span class="h" style="color:${color}">${rangeOf(p.starts_at, p.ends_at)}${rep}${zone}${place}</span>`;
 
       ev.onclick = (evt) => {
         evt.stopPropagation();
@@ -354,8 +350,7 @@ function placeNowLine() {
     line.append(Object.assign(document.createElement("span"), { className: "nowTime" }));
   }
   if (line.parentElement !== inner) inner.appendChild(line);
-  const pad = (n) => String(n).padStart(2, "0");
-  line.firstElementChild.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  line.firstElementChild.textContent = time12(now.getHours(), now.getMinutes());
   // From the first day column -- measured, since today's is wider -- to the
   // inner edge of the scrolling box, past the last column and the grid's
   // padding, so it reaches the side of the pane instead of stopping short.
@@ -797,7 +792,7 @@ function showEcho(res) {
   } else {
     const bits = [];
     if (res.byday.length) bits.push(`repeats ${res.byday.join(" ")}`);
-    if (res.span) bits.push(`${res.span[0]}–${res.span[1]}`);
+    if (res.span) bits.push(rangeHHMM(res.span[0], res.span[1]));
     if (res.item.due_at && !res.byday.length) {
       bits.push(`due ${new Date(res.item.due_at).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}`);
     }

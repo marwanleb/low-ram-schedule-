@@ -12,8 +12,8 @@
 use chrono::{DateTime, Duration, Local, Utc};
 use ms_core::{
     add_from_text, already_sent, due_soon, find_by_prefix, get_items, get_week, help_text,
-    interpret, mark_sent, prune_sent, set_done, set_setting, setting, stats, Command, Db, Filter,
-    Kind, ListScope, Notice,
+    interpret, mark_sent, prune_sent, range12, set_done, set_setting, setting, stats, Command, Db, Filter,
+    Kind, ListScope, Notice, time12,
 };
 use std::path::PathBuf;
 
@@ -89,12 +89,8 @@ fn describe(n: &Notice, now: DateTime<Utc>, zone: chrono_tz::Tz) -> String {
         Kind::Deadline => format!("due in {mins} min \u{2014} {}", n.title),
     };
     match n.ends {
-        Some(e) => out.push_str(&format!(
-            "\n{}-{}",
-            starts.format("%H:%M"),
-            e.with_timezone(&zone).format("%H:%M")
-        )),
-        None => out.push_str(&format!("\nby {}", starts.format("%H:%M"))),
+        Some(e) => out.push_str(&format!("\n{}", range12(starts.time(), e.with_timezone(&zone).time()))),
+        None => out.push_str(&format!("\nby {}", time12(starts.time()))),
     }
     if let Some(loc) = &n.location {
         out.push_str(&format!(" \u{b7} {loc}"));
@@ -122,6 +118,12 @@ fn push_due(db: &Db, token: &str, zone: chrono_tz::Tz) {
         let _ = mark_sent(db, &n.key, now);
     }
     let _ = prune_sent(db, now - Duration::days(7));
+}
+
+/// "Fri 11 Sep 5pm": a deadline in the local zone, in 12-hour time.
+fn when_due(d: DateTime<Utc>) -> String {
+    let local = d.with_timezone(&Local);
+    format!("{} {}", local.format("%a %d %b"), time12(local.time()))
 }
 
 fn fmt_mins(m: u32) -> String {
@@ -287,7 +289,7 @@ fn commit(db: &Db, text: &str, lead: &str) -> String {
                 out.push_str(&format!(
                     "
 due {}",
-                    d.with_timezone(&Local).format("%a %d %b %H:%M")
+                    when_due(d)
                 ));
             }
             if item.recurs {
@@ -392,9 +394,8 @@ fn handle(db: &Db, text: &str) -> String {
                         .map(|i| i.title)
                         .unwrap_or_else(|| p.item_id.clone());
                     out.push_str(&format!(
-                        "  {}-{}  {}\n",
-                        p.starts_at.format("%H:%M"),
-                        p.ends_at.format("%H:%M"),
+                        "  {}  {}\n",
+                        range12(p.starts_at.time(), p.ends_at.time()),
                         title
                     ));
                 }
@@ -437,7 +438,7 @@ fn handle(db: &Db, text: &str) -> String {
                 Ok(item) => {
                     let mut out = format!("added: {}", item.title);
                     if let Some(d) = item.due_at {
-                        out.push_str(&format!("\ndue {}", d.with_timezone(&Local).format("%a %d %b %H:%M")));
+                        out.push_str(&format!("\ndue {}", when_due(d)));
                     }
                     if item.recurs {
                         out.push_str(&format!("\nrepeats {}", p.byday.join(", ")));
@@ -675,5 +676,25 @@ mod tests {
         let said = talk(&db, &["pay rent monthly", "-", "-"]);
         assert!(said[2].starts_with("added"), "{:?}", said[2]);
         assert!(get_items(&db, &Filter::default())[0].recurs);
+    }
+
+    #[test]
+    fn a_reminder_reads_in_12_hour_time() {
+        use chrono::TimeZone;
+        // 15:30 UTC is 10:30am in Chicago in September; 17:00 UTC is noon.
+        let at = chrono::Utc.with_ymd_and_hms(2026, 9, 9, 15, 30, 0).unwrap();
+        let n = ms_core::Notice {
+            key: "k".into(),
+            kind: ms_core::Kind::Block,
+            title: "PHYS201".into(),
+            location: None,
+            at,
+            ends: Some(chrono::Utc.with_ymd_and_hms(2026, 9, 9, 17, 0, 0).unwrap()),
+        };
+        let text = super::describe(&n, at - chrono::Duration::minutes(10), chrono_tz::America::Chicago);
+        assert!(text.ends_with("10:30am\u{2013}12pm"), "{text:?}");
+        let deadline = ms_core::Notice { kind: ms_core::Kind::Deadline, ends: None, ..n };
+        let text = super::describe(&deadline, at - chrono::Duration::minutes(10), chrono_tz::America::Chicago);
+        assert!(text.ends_with("by 10:30am"), "{text:?}");
     }
 }

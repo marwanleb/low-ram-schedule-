@@ -182,7 +182,13 @@ window.__TAURI__ = {
             const [y, m, d] = f.date.split("-");
             bits.push(`${d}/${m}/${y}`);
           }
-          if (f.at) bits.push(f.span_end ? `${f.at}-${f.span_end}` : f.at);
+          // 12-hour, like core::compose::line.
+          const t12 = (hhmm) => {
+            const [h, m] = hhmm.split(":").map(Number);
+            const mer = h < 12 ? "am" : "pm";
+            return m ? `${h % 12 || 12}:${String(m).padStart(2, "0")}${mer}` : `${h % 12 || 12}${mer}`;
+          };
+          if (f.at) bits.push(f.span_end ? `${t12(f.at)}-${t12(f.span_end)}` : t12(f.at));
           if (f.estimate_min) {
             bits.push(f.estimate_min % 60 === 0 && f.estimate_min >= 60
               ? `~${f.estimate_min / 60}h` : `~${f.estimate_min}m`);

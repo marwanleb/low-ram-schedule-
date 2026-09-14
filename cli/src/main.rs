@@ -192,10 +192,10 @@ fn main() -> ExitCode {
                         } else {
                             String::new()
                         };
+                        // Padded so titles line up down the week.
                         println!(
-                            "      {}-{}  {} {}",
-                            p.starts_at.format("%H:%M"),
-                            p.ends_at.format("%H:%M"),
+                            "      {:<15} {} {}",
+                            ms_core::range12(p.starts_at.time(), p.ends_at.time()),
                             title,
                             zone
                         );
