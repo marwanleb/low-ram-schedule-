@@ -25,9 +25,8 @@ skips any of it. A complete line is never questioned.
 
 ## Two gestures worth knowing
 
-Clicking an empty hour opens a box in that slot. What you type goes through the
-same grammar as everywhere else, so `climb ~90m` becomes a ninety-minute block
-at three on Saturday.
+Clicking an empty hour opens those same fields with its date and time already
+filled in, as a block.
 
 Blocks already on the week can be dragged to another time or day, and pulled
 longer or shorter by their bottom edge. Dragging one occurrence of a repeating

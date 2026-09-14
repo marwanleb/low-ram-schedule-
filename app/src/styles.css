@@ -720,33 +720,6 @@ main {
 }
 .dayCol.dropTarget { background: rgba(127, 208, 236, .12); outline: 1px dashed var(--cyan); }
 
-/* the composer that opens when you click an empty hour — dashed, like the
-   capture box at the foot of the to-do list, so it reads as the same gesture */
-.slotAdd {
-  position: absolute;
-  left: 2px;
-  width: calc(100% - 5px);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  background: var(--row);
-  border-left: 4px solid var(--gold);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, .5);
-}
-.slotAdd input {
-  width: 100%;
-  min-width: 0;
-  padding: 4px 6px;
-  background: transparent;
-  border: 2px dashed var(--line-dash);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  outline: none;
-}
-.slotAdd input::placeholder { color: var(--faint); }
-.slotAdd input:focus { border-color: var(--gold); border-style: solid; }
 
 /* What the parser made of the last line you typed. Shown briefly, so a line
    that was saved as plain text does not just vanish into Someday. */

@@ -23,7 +23,6 @@ const state = {
   items: [],
   session: null,      // running timer, or null
   pinDay: null,       // clicked day — sticky filter
-  slotBox: null,      // open slot composer; while it exists the grid holds still
   following: true,    // showing the rolling window, so it moves when the date does
   focus: "schedule",
 };
@@ -232,8 +231,8 @@ function renderWeek() {
       + (day.date === wideDay ? " wide" : "");
     col.onclick = (e) => {
       // An existing block owns its own click; so does the composer once open.
-      if (e.target.closest(".ev, .slotAdd")) return;
-      openSlot(hitTest(e.clientX, e.clientY));
+      if (e.target.closest(".ev")) return;
+      openFormForSlot(hitTest(e.clientX, e.clientY));
     };
     col.style.height = `${acc}px`;
     for (const h of hours) {
@@ -537,7 +536,7 @@ setInterval(tickTimer, 1000);
 // Ticked items clear on their own, so a window left open has to notice the
 // hour passing. Re-renders only when something has actually aged out.
 setInterval(() => {
-  if (!state.week || state.slotBox) return;
+  if (!state.week) return;
   // Midnight passed with the window open: roll it on by a day.
   if (state.following && state.anchor !== rollingStart()) {
     refresh();
@@ -1086,12 +1085,11 @@ function hitTest(x, y) {
     for (const h of z.hours) {
       const height = z.heightOf(h);
       if (y >= acc && y < acc + height) {
-        return { date: z.date, hour: h, col: z.col, top: acc - r.top, height };
+        return { date: z.date, hour: h, col: z.col };
       }
       acc += height;
     }
-    const last = z.hours[z.hours.length - 1];
-    return { date: z.date, hour: last, col: z.col, top: r.height - z.heightOf(last), height: z.heightOf(last) };
+    return { date: z.date, hour: z.hours[z.hours.length - 1], col: z.col };
   }
   return null;
 }
@@ -1103,65 +1101,20 @@ function highlight(hit) {
   lastHighlight = hit?.col || null;
 }
 
-/* ── click an empty hour to put something in it ──────────────────────── */
-/** The slot supplies "on <date> <hour>"; the rest of the line goes through the
- *  ordinary grammar, so an estimate, a tag or a place written here mean what
- *  they mean anywhere else. There is no second path into the store. */
-function openSlot(hit) {
-  closeSlot();
+/* ── click an empty hour to fill the form in ─────────────────────────── */
+/** Opens the same fields the toggle does, with the slot's date and time
+ *  already in them. One way to add something, wherever you start from. */
+function openFormForSlot(hit) {
   if (!hit) return;
-
-  const d = fromIso(hit.date);
-  const box = document.createElement("div");
-  box.className = "slotAdd";
-  box.style.top = `${hit.top}px`;
-  box.style.height = `${Math.max(24, hit.height - 2)}px`;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  const h12 = hit.hour % 12 === 0 ? 12 : hit.hour % 12;
-  input.placeholder = `${WD[(d.getDay() + 6) % 7]} ${h12}${hit.hour < 12 ? "am" : "pm"} — what's on?`;
-  box.appendChild(input);
-  hit.col.appendChild(box);
-  state.slotBox = box;
-  input.focus();
-
-  // Deliberately not async: a throw inside an async handler nobody awaits is
-  // an unhandled rejection, which is silent. This one hands the await off to
-  // fileSlot, so a failure here would reach window.onerror instead of vanishing.
-  input.onkeydown = (e) => {
-    // Escape and "/" are window-wide shortcuts; while typing they are text.
-    e.stopPropagation();
-    if (e.key === "Escape") return closeSlot();
-    if (e.key !== "Enter") return;
-    const typed = input.value.trim();
-    closeSlot();
-    if (!typed) return;
-    const p2 = (n) => String(n).padStart(2, "0");
-    const when = `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
-    fileSlot(`${typed} on ${when} ${p2(hit.hour)}:00`);
-  };
-  input.onblur = closeSlot;
-}
-
-async function fileSlot(text) {
-  try {
-    const res = await invoke("cmd_add", { text });
-    await refresh();
-    showEcho(res);
-  } catch (err) {
-    showError(String(err));
-  }
-}
-
-function closeSlot() {
-  // The box holds the focused input, so removing it fires `blur`, which calls
-  // this again. Drop the reference before removing: the re-entrant call then
-  // does nothing, rather than trying to detach a node that has already gone
-  // and throwing NotFoundError out of the key handler.
-  const box = state.slotBox;
-  state.slotBox = null;
-  box?.remove();
+  $("addFields").hidden = false;
+  $("formToggle").classList.add("open");
+  $("ffDate").value = hit.date;
+  $("ffTime").value = `${String(hit.hour).padStart(2, "0")}:00`;
+  // Put on the week, so it is a block. The form still lets you say otherwise.
+  form.kind = "block";
+  for (const b of $("ffKind").children) b.classList.toggle("on", b.dataset.kind === "block");
+  refreshPreview();
+  $("ffTitle").focus();
 }
 
 function rfc(d) {
@@ -1197,7 +1150,6 @@ function hexA(hex, a) {
 let seenVersion = null;
 
 async function refreshIfChanged() {
-  if (state.slotBox) return;
   try {
     const v = await invoke("cmd_data_version");
     if (seenVersion !== null && v !== seenVersion) {
